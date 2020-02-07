@@ -37,4 +37,9 @@ private:
 
 	// updates all indexes with values greater than 'afterIdx', adding 'delta' to it.
 	void updateIndexes(int afterIdx, int delta);
+
+	void alignIndexes();
+
+	// algins data pointed to by index and updates the index accordingly
+	bool alignIndex(int& index);
 };

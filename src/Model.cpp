@@ -173,6 +173,86 @@ bool Model::mergeExternalTextures(bool deleteSource) {
 	} \
 }
 
+bool Model::alignIndex(int& index) {
+	int aligned = (index + 3) & ~3;
+	if (index == aligned) {
+		return false;
+	}
+
+	int shift = aligned - index;
+	data.seek(index);
+	int insertOffset = data.tell();
+	static char zeros[4] = { 0 };
+	index = aligned;
+	insertData(zeros, shift);
+	updateIndexes(insertOffset, shift);
+
+	cout << "Aligned index\n";
+
+	return true;
+}
+
+void Model::alignIndexes() {
+	// skeleton
+	alignIndex(header->boneindex);
+	alignIndex(header->bonecontrollerindex);
+	alignIndex(header->attachmentindex);
+	alignIndex(header->hitboxindex);
+
+	// sequences
+	alignIndex(header->seqindex);
+	alignIndex(header->seqgroupindex);
+	alignIndex(header->transitionindex);
+	for (int k = 0; k < header->numseq; k++) {
+		data.seek(header->seqindex + k * sizeof(mstudioseqdesc_t));
+		mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
+
+		alignIndex(seq->eventindex);
+		alignIndex(seq->animindex);
+		alignIndex(seq->pivotindex);
+		alignIndex(seq->automoveposindex);		// unused?
+		alignIndex(seq->automoveangleindex);	// unused?
+	}
+
+	// meshes
+	alignIndex(header->bodypartindex);
+	for (int i = 0; i < header->numbodyparts; i++) {
+		data.seek(header->bodypartindex + i * sizeof(mstudiobodyparts_t));
+		mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
+		alignIndex(bod->modelindex);
+		for (int k = 0; k < bod->nummodels; k++) {
+			data.seek(bod->modelindex + k * sizeof(mstudiomodel_t));
+			mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
+
+			alignIndex(mod->meshindex);
+			for (int j = 0; j < mod->nummesh; j++) {
+				data.seek(mod->meshindex + j * sizeof(mstudiomesh_t));
+				mstudiomesh_t* mesh = (mstudiomesh_t*)data.get();
+				alignIndex(mesh->normindex); // TODO: is this a file index?
+				alignIndex(mesh->triindex);
+			}
+			alignIndex(mod->normindex);
+			alignIndex(mod->norminfoindex);
+			alignIndex(mod->vertindex);
+			alignIndex(mod->vertinfoindex);
+		}
+	}
+
+	// textures
+	alignIndex(header->textureindex);
+	for (int i = 0; i < header->numtextures; i++) {
+		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
+		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
+		alignIndex(texture->index);
+	}
+	alignIndex(header->skinindex);
+	alignIndex(header->texturedataindex);
+
+	// sounds (unused?)
+	alignIndex(header->soundindex);
+	alignIndex(header->soundgroupindex);
+}
+
 void Model::updateIndexes(int afterIdx, int delta) {
 	// skeleton
 	MOVE_INDEX(header->boneindex, afterIdx, delta);
@@ -307,6 +387,9 @@ bool Model::mergeExternalSequences(bool deleteSource) {
 	removeData(removeBytes);
 	header->numseqgroups = 1;
 	updateIndexes(removeOffset, -removeBytes);
+	
+	// TODO: is this even possible?
+	alignIndexes();
 
 	return true;
 }
