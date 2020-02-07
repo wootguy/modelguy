@@ -23,6 +23,10 @@ public:
 	// deletes data and creates a new buffer to hold the new size
 	void insert(void* src, size_t bytes);
 
+	// deletes data at current position, moving existing data after it
+	// deletes data and creates a new buffer to hold the new size
+	void remove(size_t bytes);
+
 	// returns the offset in the buffer
 	size_t tell();
 
