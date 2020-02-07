@@ -33,6 +33,8 @@ private:
 
 	void insertData(void * src, size_t bytes);
 
-	// updates all indexes with values greater than 'afterIdx', adding 'delta' to it
+	void removeData(size_t bytes);
+
+	// updates all indexes with values greater than 'afterIdx', adding 'delta' to it.
 	void updateIndexes(int afterIdx, int delta);
 };
