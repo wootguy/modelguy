@@ -48,20 +48,6 @@ size_t mstream::write( void * src, size_t bytes )
 	return bytes;
 }
 
-void mstream::resize(size_t newSize) {
-	size_t offset = pos - start;
-	size_t oldSize = end - start;
-
-	char* newData = new char[newSize];
-	memcpy(newData, (void*)start, oldSize);
-	delete[](char*)start;
-
-	start = (size_t)newData;
-	end = start + newSize;
-	pos = start + offset;
-	eomFlag = offset >= newSize;
-}
-
 void mstream::insert(void* src, size_t bytes) {
 	size_t offset = pos - start;
 	size_t oldSize = end - start;
@@ -71,6 +57,22 @@ void mstream::insert(void* src, size_t bytes) {
 	memcpy(newData, (char*)start, offset);
 	memcpy(newData+offset, src, bytes);
 	memcpy(newData+offset+bytes, (char*)pos, oldSize - offset);
+	delete[](char*)start;
+
+	start = (size_t)newData;
+	end = start + newSize;
+	pos = start + offset + bytes;
+	eomFlag = offset >= newSize;
+}
+
+void mstream::remove(size_t bytes) {
+	size_t offset = pos - start;
+	size_t oldSize = end - start;
+	size_t newSize = oldSize - bytes;
+
+	char* newData = new char[newSize];
+	memcpy(newData, (char*)start, offset);
+	memcpy(newData + offset, (char*)(pos+bytes), oldSize - (offset + bytes));
 	delete[](char*)start;
 
 	start = (size_t)newData;

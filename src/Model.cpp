@@ -88,6 +88,11 @@ void Model::insertData(void* src, size_t bytes) {
 	header = (studiohdr_t*)data.getBuffer();
 }
 
+void Model::removeData(size_t bytes) {
+	data.remove(bytes);
+	header = (studiohdr_t*)data.getBuffer();
+}
+
 bool Model::mergeExternalTextures(bool deleteSource) {
 	if (!hasExternalTextures()) {
 		cout << "No external textures to merge\n";
@@ -183,6 +188,7 @@ void Model::updateIndexes(int afterIdx, int delta) {
 		data.seek(header->seqindex + k * sizeof(mstudioseqdesc_t));
 		mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
 
+		MOVE_INDEX(seq->eventindex, afterIdx, delta);
 		MOVE_INDEX(seq->animindex, afterIdx, delta);
 		MOVE_INDEX(seq->pivotindex, afterIdx, delta);
 		MOVE_INDEX(seq->automoveposindex, afterIdx, delta);		// unused?
@@ -276,7 +282,7 @@ bool Model::mergeExternalSequences(bool deleteSource) {
 		insertData(smodel.data.get(), animCopySize);
 		updateIndexes(insertOffset, animCopySize);
 
-		// update indexes for 
+		// update indexes for the merged animations
 		for (int k = 0; k < header->numseq; k++) {
 			data.seek(header->seqindex + k * sizeof(mstudioseqdesc_t));
 			mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
@@ -294,7 +300,13 @@ bool Model::mergeExternalSequences(bool deleteSource) {
 
 	delete[] oldanimindexes;
 
+	// remove infos for the merged sequence groups
+	data.seek(header->seqgroupindex + sizeof(mstudioseqgroup_t));
+	size_t removeOffset = data.tell();
+	int removeBytes = sizeof(mstudioseqgroup_t) * (header->numseqgroups - 1);
+	removeData(removeBytes);
 	header->numseqgroups = 1;
+	updateIndexes(removeOffset, -removeBytes);
 
 	return true;
 }
