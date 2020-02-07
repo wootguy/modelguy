@@ -25,6 +25,6 @@ char * loadFile( const string& fileName, int& length)
 	fin.seekg(0);
 	fin.read(buffer, size);
 	fin.close();
-	length = (int)size; // surely icons will never exceed 2 GB
+	length = (int)size; // surely models will never exceed 2 GB
 	return buffer;
 }

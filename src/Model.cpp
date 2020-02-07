@@ -3,9 +3,6 @@
 #include <iostream>
 #include <fstream>
 
-// from HLSDK
-#define ALIGN( a ) a = (byte *)((int)((byte *)a + 3) & ~ 3)
-
 Model::Model(string fpath)
 {
 	this->fpath = fpath;
@@ -86,19 +83,12 @@ bool Model::hasExternalSequences() {
 	return header->numseqgroups > 1;
 }
 
-char* Model::getTextures() {
-	if (hasExternalTextures())
-		return NULL;
-
-	cout << "ZOMG DAT TEXTURES\n";
-}
-
 void Model::insertData(void* src, size_t bytes) {
 	data.insert(src, bytes);
 	header = (studiohdr_t*)data.getBuffer();
 }
 
-bool Model::mergeExternalTextures() {
+bool Model::mergeExternalTextures(bool deleteSource) {
 	if (!hasExternalTextures()) {
 		cout << "No external textures to merge\n";
 		return false;
@@ -117,17 +107,19 @@ bool Model::mergeExternalTextures() {
 		}
 	}
 
+	int lastSlash = tpath.find_last_of("/\\");
+	string fname = tpath.substr(lastSlash + 1);
+	cout << "Merging " << fname << "\n";
+
 	Model tmodel(tpath);
 
 	// copy info
 	header->numtextures = tmodel.header->numtextures;
 	header->numskinref = tmodel.header->numskinref;
 	header->numskinfamilies = tmodel.header->numskinfamilies;
-	
 
 	// recalculate indexes
-	data.seek(0, SEEK_END);
-	size_t actualtextureindex = data.tell();
+	size_t actualtextureindex = data.size();
 	size_t tmodel_textureindex = tmodel.header->textureindex;
 	size_t tmodel_skinindex = tmodel.header->skinindex;
 	size_t tmodel_texturedataindex = tmodel.header->texturedataindex;
@@ -136,6 +128,7 @@ bool Model::mergeExternalTextures() {
 	header->texturedataindex = actualtextureindex + (tmodel_texturedataindex - tmodel_textureindex);
 
 	// texture data is at the end of the file, with the structures grouped together
+	data.seek(0, SEEK_END);
 	tmodel.data.seek(tmodel_textureindex);
 	insertData(tmodel.data.get(), tmodel.data.size() - tmodel.data.tell());
 
@@ -159,6 +152,151 @@ bool Model::mergeExternalTextures() {
 		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
 		texture->index = actualtextureindex + (texture->index - tmodel_textureindex);
 	}
+
+	header->length = data.size();
+
+	if (deleteSource)
+		remove(tpath.c_str());
+
+	return true;
+}
+
+#define MOVE_INDEX(val, afterIdx, delta) { \
+	if (val >= afterIdx) { \
+		val += delta; \
+		/*cout << "Updated: " << #val << endl;*/ \
+	} \
+}
+
+void Model::updateIndexes(int afterIdx, int delta) {
+	// skeleton
+	MOVE_INDEX(header->boneindex, afterIdx, delta);
+	MOVE_INDEX(header->bonecontrollerindex, afterIdx, delta);
+	MOVE_INDEX(header->attachmentindex, afterIdx, delta);
+	MOVE_INDEX(header->hitboxindex, afterIdx, delta);
+
+	// sequences
+	MOVE_INDEX(header->seqindex, afterIdx, delta);
+	MOVE_INDEX(header->seqgroupindex, afterIdx, delta);
+	MOVE_INDEX(header->transitionindex, afterIdx, delta);
+	for (int k = 0; k < header->numseq; k++) {
+		data.seek(header->seqindex + k * sizeof(mstudioseqdesc_t));
+		mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
+
+		MOVE_INDEX(seq->animindex, afterIdx, delta);
+		MOVE_INDEX(seq->pivotindex, afterIdx, delta);
+		MOVE_INDEX(seq->automoveposindex, afterIdx, delta);		// unused?
+		MOVE_INDEX(seq->automoveangleindex, afterIdx, delta);	// unused?
+	}
+
+	// meshes
+	MOVE_INDEX(header->bodypartindex, afterIdx, delta);
+	for (int i = 0; i < header->numbodyparts; i++) {
+		data.seek(header->bodypartindex + i*sizeof(mstudiobodyparts_t));
+		mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
+		MOVE_INDEX(bod->modelindex, afterIdx, delta);
+		for (int k = 0; k < bod->nummodels; k++) {
+			data.seek(bod->modelindex + k * sizeof(mstudiomodel_t));
+			mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
+
+			MOVE_INDEX(mod->meshindex, afterIdx, delta);
+			for (int j = 0; j < mod->nummesh; j++) {
+				data.seek(mod->meshindex + j * sizeof(mstudiomesh_t));
+				mstudiomesh_t* mesh = (mstudiomesh_t*)data.get();
+				MOVE_INDEX(mesh->normindex, afterIdx, delta, "normindex"); // TODO: is this a file index?
+				MOVE_INDEX(mesh->triindex, afterIdx, delta);
+			}
+			MOVE_INDEX(mod->normindex, afterIdx, delta);
+			MOVE_INDEX(mod->norminfoindex, afterIdx, delta);
+			MOVE_INDEX(mod->vertindex, afterIdx, delta);
+			MOVE_INDEX(mod->vertinfoindex, afterIdx, delta);
+		}
+	}
+
+	// textures
+	MOVE_INDEX(header->textureindex, afterIdx, delta);
+	for (int i = 0; i < header->numtextures; i++) {
+		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
+		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
+		MOVE_INDEX(texture->index, afterIdx, delta);
+	}
+	MOVE_INDEX(header->skinindex, afterIdx, delta);
+	MOVE_INDEX(header->texturedataindex, afterIdx, delta);
+
+	// sounds (unused?)
+	MOVE_INDEX(header->soundindex, afterIdx, delta);
+	MOVE_INDEX(header->soundgroupindex, afterIdx, delta);
+
+	header->length = data.size();
+}
+
+bool Model::mergeExternalSequences(bool deleteSource) {
+	if (!hasExternalSequences()) {
+		cout << "No external sequences to merge\n";
+		return false;
+	}
+
+	int lastDot = fpath.find_last_of(".");
+	string ext = fpath.substr(lastDot);
+	string basepath = fpath.substr(0, lastDot);
+
+	// save external animations to the end of the file.
+	data.seek(0, SEEK_END);
+
+	// save old values before they're overwritten in index updates
+	int* oldanimindexes = new int[header->numseq];
+	for (int k = 0; k < header->numseq; k++) {
+		data.seek(header->seqindex + k * sizeof(mstudioseqdesc_t));
+		mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
+		oldanimindexes[k] = seq->animindex;
+	}
+
+	for (int i = 1; i < header->numseqgroups; i++)
+	{
+		string suffix = i < 10 ? "0" + to_string(i) : to_string(i);
+		string spath = basepath + suffix + ext;
+
+		if (!fileExists(spath)) {
+			cout << "External sequence model not found: " << spath << endl;
+			return false;
+		}
+
+		int lastSlash = spath.find_last_of("/\\");
+		string fname = spath.substr(lastSlash + 1);
+		cout << "Merging " << fname << "\n";
+
+		Model smodel(spath);
+
+		// Sequence models contain a header followed by animation data.
+		// This will append those animations after the primary model's animations.
+		data.seek(header->seqindex);
+		smodel.data.seek(sizeof(studioseqhdr_t));
+		size_t insertOffset = data.tell();
+		size_t animCopySize = smodel.data.size() - sizeof(studioseqhdr_t);
+		insertData(smodel.data.get(), animCopySize);
+		updateIndexes(insertOffset, animCopySize);
+
+		// update indexes for 
+		for (int k = 0; k < header->numseq; k++) {
+			data.seek(header->seqindex + k * sizeof(mstudioseqdesc_t));
+			mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
+
+			if (seq->seqgroup != i)
+				continue;
+
+			seq->animindex = insertOffset + (oldanimindexes[k] - sizeof(studioseqhdr_t));
+			seq->seqgroup = 0;
+		}
+
+		if (deleteSource)
+			remove(spath.c_str());
+	}
+
+	delete[] oldanimindexes;
+
+	header->numseqgroups = 1;
+
+	return true;
 }
 
 void Model::write(string fpath) {

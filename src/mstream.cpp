@@ -68,9 +68,9 @@ void mstream::insert(void* src, size_t bytes) {
 	size_t newSize = oldSize + bytes;
 
 	char* newData = new char[newSize];
-	memcpy(newData, (void*)start, offset);
+	memcpy(newData, (char*)start, offset);
 	memcpy(newData+offset, src, bytes);
-	memcpy(newData+offset+bytes, (void*)pos, oldSize - offset);
+	memcpy(newData+offset+bytes, (char*)pos, oldSize - offset);
 	delete[](char*)start;
 
 	start = (size_t)newData;
