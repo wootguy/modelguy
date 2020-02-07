@@ -22,16 +22,17 @@ public:
 	// model has no triangles?
 	bool isEmpty();
 
-	bool mergeExternalTextures();
+	bool mergeExternalTextures(bool deleteSource);
 
-	char* getTextures();
+	bool mergeExternalSequences(bool deleteSource);
 
 	void write(string fpath);
-
-	void getTextureDataSize();
 
 private:
 	string fpath;
 
 	void insertData(void * src, size_t bytes);
+
+	// updates all indexes with values greater than 'afterIdx', adding 'delta' to it
+	void updateIndexes(int afterIdx, int delta);
 };

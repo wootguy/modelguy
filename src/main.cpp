@@ -6,8 +6,6 @@
 #include <iostream>
 
 int merge_model(string inputFile, string outputFile) {
-	cout << "Merging " << inputFile << endl;
-
 	Model model(inputFile);
 
 	if (!model.validate())
@@ -18,8 +16,12 @@ int merge_model(string inputFile, string outputFile) {
 		return 1;
 	}
 
-	model.mergeExternalTextures();
+	bool deleteSources = inputFile == outputFile;
+	model.mergeExternalSequences(deleteSources);
+	model.mergeExternalTextures(deleteSources);
+
 	model.write(outputFile);
+	cout << "Wrote " << outputFile << " (" << model.data.size() << " bytes)\n";
 }
 
 int main(int argc, char* argv[])
@@ -57,9 +59,9 @@ int main(int argc, char* argv[])
 			"Usage: modelguy <command> <input.mdl> [output.mdl]\n"
 
 			"\n\<Commands>\n"
-			"  merge : Merges external texture and sequence models into the output model.\n\n"
+			"  merge : Merges external texture and sequence models into the output model.\n"
+			"          If no output file is specified, the external models will also be deleted.\n\n"
 			;
-			system("pause");
 			return 0;
 		}
 	}
