@@ -13,11 +13,7 @@
 
 #ifndef _STUDIO_H_
 #define _STUDIO_H_
-
-typedef unsigned char byte;
-struct vec3 {
-	float x, y, z;
-};
+#include "types.h"
 
 /*
 ==============================================================================

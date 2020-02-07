@@ -3,7 +3,11 @@ project(modelguy)
 
 set(SOURCE_FILES 
     src/main.cpp
+    src/util.cpp	src/util.h
+    src/Model.cpp	src/Model.h
+    src/mstream.cpp	src/mstream.h
 	src/studio.h
+	src/types.h
 )
 
 if(MSVC)
