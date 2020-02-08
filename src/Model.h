@@ -26,6 +26,8 @@ public:
 
 	bool mergeExternalSequences(bool deleteSource);
 
+	bool cropTexture(string texName, int width, int height);
+
 	void write(string fpath);
 
 private:
