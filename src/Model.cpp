@@ -58,7 +58,7 @@ bool Model::validate() {
 }
 
 bool Model::isEmpty() {
-	bool isEmptyModel = true; // textures aren't needed if the model has no triangles
+	bool isEmptyModel = true;
 
 	data.seek(header->bodypartindex);
 	mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
@@ -76,6 +76,7 @@ bool Model::isEmpty() {
 }
 
 bool Model::hasExternalTextures() {
+	// textures aren't needed if the model has no triangles
 	return header->numtextures == 0 && !isEmpty();
 }
 
@@ -311,7 +312,67 @@ bool Model::mergeExternalSequences(bool deleteSource) {
 	return true;
 }
 
+bool Model::cropTexture(string cropName, int newWidth, int newHeight) {
+	for (int i = 0; i < header->numtextures; i++) {
+		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
+		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
+		string name = texture->name;
+
+		if (string(texture->name) != cropName) {
+			continue;
+		}
+
+		if (newWidth > texture->width) {
+			cout << "ERROR: New width (" << newWidth << ") is greater than current width (" << texture->width << endl;
+			return false;
+		}
+		if (newHeight > texture->height) {
+			cout << "ERROR: New height (" << newHeight << ") is greater than current height (" << texture->height << endl;
+			return false;
+		}
+
+		cout << "Cropping " << cropName << " from " << texture->width << "x" << texture->height <<
+			" to " << newWidth << "x" << newHeight << endl;
+
+		data.seek(texture->index); // skip the palette
+		int oldSize = texture->width * texture->height;
+		int newSize = newWidth * newHeight;
+		int palSize = 256 * 3;
+		byte* oldTexData = new byte[oldSize];
+		byte* palette = new byte[palSize];
+		byte* newTexData = new byte[newSize];
+		data.read(oldTexData, oldSize);
+		data.read(palette, palSize);
+		
+		for (int y = 0; y < newHeight; y++) {
+			for (int x = 0; x < newWidth; x++) {
+				newTexData[y * newWidth + x] = oldTexData[y*texture->width + x];
+			}
+		}
+
+		data.seek(texture->index);
+		data.write(newTexData, newSize);
+		data.write(palette, palSize);
+
+		texture->width = newWidth;
+		texture->height = newHeight;
+
+		size_t removeAt = data.tell();
+		int removeBytes = oldSize - newSize;
+		removeData(removeBytes);
+		updateIndexes(removeAt, -removeBytes);
+
+		header->length = data.size();
+
+		return true;
+	}
+
+	cout << "ERROR: No texture found with name '" << cropName << "'\n";
+	return false;
+}
+
 void Model::write(string fpath) {
 	fstream fout = fstream(fpath.c_str(), std::ios::out | std::ios::binary);
 	fout.write(data.getBuffer(), data.size());
+	cout << "Wrote " << fpath << " (" << data.size() << " bytes)\n";
 }
