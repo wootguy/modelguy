@@ -28,6 +28,8 @@ public:
 
 	bool cropTexture(string texName, int width, int height);
 
+	bool renameTexture(string cropName, string newName);
+
 	void write(string fpath);
 
 private:
