@@ -334,7 +334,7 @@ bool Model::cropTexture(string cropName, int newWidth, int newHeight) {
 		cout << "Cropping " << cropName << " from " << texture->width << "x" << texture->height <<
 			" to " << newWidth << "x" << newHeight << endl;
 
-		data.seek(texture->index); // skip the palette
+		data.seek(texture->index);
 		int oldSize = texture->width * texture->height;
 		int newSize = newWidth * newHeight;
 		int palSize = 256 * 3;
@@ -368,6 +368,21 @@ bool Model::cropTexture(string cropName, int newWidth, int newHeight) {
 	}
 
 	cout << "ERROR: No texture found with name '" << cropName << "'\n";
+	return false;
+}
+
+bool Model::renameTexture(string oldName, string newName) {
+	for (int i = 0; i < header->numtextures; i++) {
+		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
+		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
+
+		if (string(texture->name) == oldName) {
+			strncpy(texture->name, newName.c_str(), 64);
+			return true;
+		}
+	}
+
+	cout << "ERROR: No texture found with name '" << oldName << "'\n";
 	return false;
 }
 

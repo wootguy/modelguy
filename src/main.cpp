@@ -39,6 +39,20 @@ int crop_texture(string inputFile, string outputFile, string texName, int width,
 	return 0;
 }
 
+int rename_texture(string inputFile, string outputFile, string texName, string newTexName) {
+	Model model(inputFile);
+
+	if (!model.validate())
+		return 1;
+
+	if (!model.renameTexture(texName, newTexName))
+		return 1;
+
+	model.write(outputFile);
+
+	return 0;
+}
+
 int main(int argc, char* argv[])
 {
 	// parse command-line args
@@ -46,6 +60,7 @@ int main(int argc, char* argv[])
 	string outputFile;
 	string command;
 	string texName;
+	string newTexName;
 	int cropWidth = 0;
 	int cropHeight = 0;
 
@@ -79,6 +94,15 @@ int main(int argc, char* argv[])
 					cropHeight = atoi(larg.substr(xidx+1).c_str());
 				}
 			}
+
+			if (command == "rename") {
+				if (i == 2) {
+					texName = arg;
+				}
+				else if (i == 3) {
+					newTexName = arg;
+				}
+			}
 		}
 
 		if (larg.find("-help") == 0 || argc <= 1)
@@ -88,14 +112,16 @@ int main(int argc, char* argv[])
 			"Usage: modelguy <command> <parameters> <input.mdl> [output.mdl]\n"
 
 			"\n<Commands>\n"
-			"  merge : Merges external texture and sequence models into the output model.\n"
-			"          If no output file is specified, the external models will also be deleted.\n"
-			"  crop  : Crops a texture to the specified dimensions. Used after compiling model.\n"
-			"          Takes <width>x<height> as parameters.\n\n"
+			"  merge  : Merges external texture and sequence models into the output model.\n"
+			"           If no output file is specified, the external models will also be deleted.\n"
+			"  crop   : Crops a texture to the specified dimensions. Used after compiling model.\n"
+			"           Takes <width>x<height> as parameters.\n\n"
+			"  rename : Renames a texture.\n\n"
 
 			"\nExamples:\n"
 			"  modelguy merge barney.mdl\n"
 			"  modelguy crop face.bmp 100x80 hgrunt.mdl\n"
+			"  modelguy rename hev_arm.bmp Remap1_000_255_255.bmp v_shotgun.mdl\n"
 			;
 			return 0;
 		}
@@ -127,6 +153,21 @@ int main(int argc, char* argv[])
 			return 1;
 		}
 		return crop_texture(inputFile, outputFile, texName, cropWidth, cropHeight);
+	}
+	else if (command == "rename") {
+		if (texName.size() == 0) {
+			cout << "ERROR: No texture name specified\n";
+			return 1;
+		}
+		if (newTexName.size() == 0) {
+			cout << "ERROR: No new texture name specified\n";
+			return 1;
+		}
+		if (newTexName.size() > 64) {
+			cout << "ERROR: New texture name must be 64 characters or fewer\n";
+			return 1;
+		}
+		return rename_texture(inputFile, outputFile, texName, newTexName);
 	}
 	else {
 		cout << "unrecognized command: " << command << endl;
