@@ -115,7 +115,7 @@ int main(int argc, char* argv[])
 			"  merge  : Merges external texture and sequence models into the output model.\n"
 			"           If no output file is specified, the external models will also be deleted.\n"
 			"  crop   : Crops a texture to the specified dimensions. Used after compiling model.\n"
-			"           Takes <width>x<height> as parameters.\n\n"
+			"           Takes <width>x<height> as parameters.\n"
 			"  rename : Renames a texture.\n\n"
 
 			"\nExamples:\n"
