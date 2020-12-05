@@ -116,7 +116,7 @@ int main(int argc, char* argv[])
 			"           If no output file is specified, the external models will also be deleted.\n"
 			"  crop   : Crops a texture to the specified dimensions. Used after compiling model.\n"
 			"           Takes <width>x<height> as parameters.\n"
-			"  rename : Renames a texture.\n\n"
+			"  rename : Renames a texture. Takes <old name> <new name> as parameters.\n\n"
 
 			"\nExamples:\n"
 			"  modelguy merge barney.mdl\n"
