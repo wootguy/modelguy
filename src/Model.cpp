@@ -322,15 +322,6 @@ bool Model::cropTexture(string cropName, int newWidth, int newHeight) {
 			continue;
 		}
 
-		if (newWidth > texture->width) {
-			cout << "ERROR: New width (" << newWidth << ") is greater than current width (" << texture->width << endl;
-			return false;
-		}
-		if (newHeight > texture->height) {
-			cout << "ERROR: New height (" << newHeight << ") is greater than current height (" << texture->height << endl;
-			return false;
-		}
-
 		cout << "Cropping " << cropName << " from " << texture->width << "x" << texture->height <<
 			" to " << newWidth << "x" << newHeight << endl;
 
@@ -346,7 +337,9 @@ bool Model::cropTexture(string cropName, int newWidth, int newHeight) {
 		
 		for (int y = 0; y < newHeight; y++) {
 			for (int x = 0; x < newWidth; x++) {
-				newTexData[y * newWidth + x] = oldTexData[y*texture->width + x];
+				int oldY = y >= texture->height ? texture->height-1 : y;
+				int oldX = x >= texture->width ? texture->width -1 : x;
+				newTexData[y * newWidth + x] = oldTexData[oldY*texture->width + oldX];
 			}
 		}
 
