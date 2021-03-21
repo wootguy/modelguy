@@ -1,3 +1,7 @@
+### This tool is mostly obsolete. Use HLAM instead. It can do almost everything this program can, and works with more models.
+https://github.com/Solokiller/HL_Tools/releases
+
+
 # modelguy
 This tool modifies Half-Life models without decompiling them.
 
