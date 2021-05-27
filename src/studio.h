@@ -147,7 +147,7 @@ typedef struct
 	char				label[32];	// textual name
 	char				name[64];	// file name
 	cache_user_t		cache;		// cache index pointer
-	int					data;		// hack for group 0
+	//int					data;		// hack for group 0
 } mstudioseqgroup_t;
 
 // sequence descriptions
@@ -304,7 +304,7 @@ typedef struct
 } mstudiomesh_t;
 
 // triangles
-#if 0
+#if 1
 typedef struct 
 {
 	short				vertindex;		// index into vertex array

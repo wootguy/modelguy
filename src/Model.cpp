@@ -52,6 +52,145 @@ bool Model::validate() {
 			cout << "ERROR: Failed to load body " + to_string(i) + "/" + to_string(bod->nummodels) + "\n";
 			return false;
 		}
+
+		for (int k = 0; k < mod->nummesh; k++) {
+			data.seek(mod->meshindex + i * sizeof(mstudiomesh_t));
+
+			if (data.eom()) {
+				cout << "ERROR: Failed to load mesh " + to_string(k) + " in model " + to_string(i) + "\n";
+				return false;
+			}
+
+			mstudiomesh_t* mesh = (mstudiomesh_t*)data.get();
+
+			data.seek(mesh->normindex + (mesh->numnorms*sizeof(vec3)) - 1);
+			if (data.eom()) {
+				cout << "ERROR: Failed to load normals for mesh " + to_string(k) + " in model " + to_string(i) + "\n";
+				return false;
+			}
+
+			data.seek(mesh->triindex + (mesh->numtris * sizeof(mstudiotrivert_t)*3) - 1);
+			if (data.eom()) {
+				cout << "ERROR: Failed to load triangles for mesh " + to_string(k) + " in model " + to_string(i) + "\n";
+				return false;
+			}
+		}
+	}
+
+	for (int i = 0; i < header->numseq; i++) {
+		data.seek(header->seqindex + i*sizeof(mstudioseqdesc_t));
+		if (data.eom()) {
+			cout << "ERROR: Failed to load sequence " + to_string(i) + "/" + to_string(header->numseq) + "\n";
+			return false;
+		}
+
+		mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
+
+		for (int k = 0; k < seq->numevents; k++) {
+			data.seek(seq->eventindex + k*sizeof(mstudioevent_t));
+			
+			if (data.eom()) {
+				cout << "ERROR: Failed to load event " + to_string(k) + "/" + to_string(seq->numevents) + " in sequence " + to_string(i) +"\n";
+				return false;
+			}
+
+			mstudioevent_t* evt = (mstudioevent_t*)data.get();
+		}
+
+		data.seek(seq->animindex + (seq->numblends * header->numbones * sizeof(mstudioanim_t) * 6) - 1);
+		if (data.eom()) {
+			cout << "ERROR: Failed to load bone data for sequence " + to_string(i) + "/" + to_string(header->numseq) + "\n";
+			return false;
+		}
+	}
+
+	for (int i = 0; i < header->numbones; i++) {
+		data.seek(header->boneindex + i * sizeof(mstudiobone_t));
+		if (data.eom()) {
+			cout << "ERROR: Failed to load sequence " + to_string(i) + "/" + to_string(header->numseq) + "\n";
+			return false;
+		}
+
+		mstudiobone_t* bone = (mstudiobone_t*)data.get();
+		if (bone->parent < -1 || bone->parent >= header->numbones) {
+			cout << "ERROR: Bone " + to_string(i) + " has invalid parent " + to_string(bone->parent) + "\n";
+			return false;
+		}
+	}
+
+	for (int i = 0; i < header->numbonecontrollers; i++) {
+		data.seek(header->bonecontrollerindex + i * sizeof(mstudiobonecontroller_t));
+		if (data.eom()) {
+			cout << "ERROR: Failed to load bone controller " + to_string(i) + "/" + to_string(header->numbonecontrollers) + "\n";
+			return false;
+		}
+
+		mstudiobonecontroller_t* ctl = (mstudiobonecontroller_t*)data.get();
+		if (ctl->bone < -1 || ctl->bone >= header->numbones) {
+			cout << "ERROR: Controller " + to_string(i) + " references invalid bone " + to_string(ctl->bone) + "\n";
+			return false;
+		}
+	}
+
+	for (int i = 0; i < header->numhitboxes; i++) {
+		data.seek(header->hitboxindex + i * sizeof(mstudiobbox_t));
+		if (data.eom()) {
+			cout << "ERROR: Failed to load bone controller " + to_string(i) + "/" + to_string(header->numhitboxes) + "\n";
+			return false;
+		}
+
+		mstudiobbox_t* box = (mstudiobbox_t*)data.get();
+		if (box->bone < -1 || box->bone >= header->numbones) {
+			cout << "ERROR: Hitbox " + to_string(i) + " references invalid bone " + to_string(box->bone) + "\n";
+			return false;
+		}
+	}
+
+	for (int i = 0; i < header->numseqgroups; i++) {
+		data.seek(header->seqgroupindex + i * sizeof(mstudioseqgroup_t));
+		if (data.eom()) {
+			cout << "ERROR: Failed to load sequence group " + to_string(i) + "/" + to_string(header->numseqgroups) + "\n";
+			return false;
+		}
+
+		mstudioseqgroup_t* grp = (mstudioseqgroup_t*)data.get();
+	}
+
+	for (int i = 0; i < header->numtextures; i++) {
+		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
+		if (data.eom()) {
+			cout << "ERROR: Failed to load texture " + to_string(i) + "/" + to_string(header->numtextures) + "\n";
+			return false;
+		}
+
+		mstudiotexture_t* tex = (mstudiotexture_t*)data.get();
+		data.seek(tex->index + (tex->width*tex->height + 256*3) - 1);
+		if (data.eom()) {
+			cout << "ERROR: Failed to load texture data " + to_string(i) + "/" + to_string(header->numtextures) + "\n";
+			return false;
+		}
+	}
+
+	for (int i = 0; i < header->numskinfamilies; i++) {
+		data.seek(header->skinindex + i * sizeof(short)*header->numskinref);
+		if (data.eom()) {
+			cout << "ERROR: Failed to load skin family " + to_string(i) + "/" + to_string(header->numskinfamilies) + "\n";
+			return false;
+		}
+	}
+
+	for (int i = 0; i < header->numattachments; i++) {
+		data.seek(header->attachmentindex + i * sizeof(mstudioattachment_t));
+		if (data.eom()) {
+			cout << "ERROR: Failed to load attachment " + to_string(i) + "/" + to_string(header->numattachments) + "\n";
+			return false;
+		}
+
+		mstudioattachment_t* att = (mstudioattachment_t*)data.get();
+		if (att->bone < -1 || att->bone >= header->numbones) {
+			cout << "ERROR: Attachment " + to_string(i) + " references invalid bone " + to_string(att->bone) + "\n";
+			return false;
+		}
 	}
 
 	return true;
@@ -210,7 +349,7 @@ void Model::updateIndexes(int afterIdx, int delta) {
 			for (int j = 0; j < mod->nummesh; j++) {
 				data.seek(mod->meshindex + j * sizeof(mstudiomesh_t));
 				mstudiomesh_t* mesh = (mstudiomesh_t*)data.get();
-				MOVE_INDEX(mesh->normindex, afterIdx, delta, "normindex"); // TODO: is this a file index?
+				MOVE_INDEX(mesh->normindex, afterIdx, delta); // TODO: is this a file index?
 				MOVE_INDEX(mesh->triindex, afterIdx, delta);
 			}
 			MOVE_INDEX(mod->normindex, afterIdx, delta);
