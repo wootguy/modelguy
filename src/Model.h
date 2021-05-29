@@ -1,6 +1,9 @@
+#pragma once
+
 #include "types.h"
 #include "studio.h"
 #include <string>
+#include <vector>
 #include "mstream.h"
 
 class Model {
@@ -31,6 +34,12 @@ public:
 	bool renameTexture(string cropName, string newName);
 
 	void write(string fpath);
+
+	// caller is responsible for deleting the ptr
+	vector<vec3> getVertexes();
+
+	// write model info to a json file
+	void dump_info(string outputPath);
 
 private:
 	string fpath;

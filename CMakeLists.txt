@@ -8,6 +8,9 @@ set(SOURCE_FILES
     src/mstream.cpp	src/mstream.h
 	src/studio.h
 	src/types.h
+	
+	src/lib/json.hpp
+	src/lib/md5.h		src/lib/md5.cpp
 )
 
 if(MSVC)

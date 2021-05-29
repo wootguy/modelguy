@@ -2,6 +2,10 @@
 #include "util.h"
 #include <iostream>
 #include <fstream>
+#include "lib/json.hpp"
+#include "lib/md5.h"
+
+using json::JSON;
 
 Model::Model(string fpath)
 {
@@ -522,4 +526,184 @@ void Model::write(string fpath) {
 	fstream fout = fstream(fpath.c_str(), std::ios::out | std::ios::binary);
 	fout.write(data.getBuffer(), data.size());
 	cout << "Wrote " << fpath << " (" << data.size() << " bytes)\n";
+}
+
+vector<vec3> Model::getVertexes() {
+	int totalVerts = 0;
+
+	for (int k = 0; k < header->numbodyparts; k++) {
+		data.seek(header->bodypartindex + k * sizeof(mstudiobodyparts_t));
+		mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
+
+		for (int i = 0; i < bod->nummodels; i++) {
+			data.seek(bod->modelindex + i * sizeof(mstudiomodel_t));
+			mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
+			totalVerts += mod->numverts;
+		}
+	}
+
+	
+	vector<vec3> verts;
+
+	for (int k = 0; k < header->numbodyparts; k++) {
+		data.seek(header->bodypartindex + k*sizeof(mstudiobodyparts_t));
+		mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
+
+		for (int i = 0; i < bod->nummodels; i++) {
+			data.seek(bod->modelindex + i * sizeof(mstudiomodel_t));
+			mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
+			data.seek(mod->vertindex);
+			vec3* vertSrc = (vec3 * )data.get();
+
+			verts.reserve(mod->numverts);
+			for (int v = 0; v < mod->numverts; v++) {
+				verts.push_back(vertSrc[v]);
+			}
+		}
+	}
+
+	return verts;
+}
+
+void Model::dump_info(string outputPath) {
+	JSON obj = json::Object();
+
+	obj["seq_groups"] = to_string(header->numseqgroups);
+	obj["t_model"] = hasExternalTextures();
+
+	if (hasExternalTextures())
+		mergeExternalTextures(false);
+	if (hasExternalSequences())
+		mergeExternalSequences(false);
+
+	MD5 hash = MD5();
+	hash.add(data.get(), data.size());
+	obj["md5"] = hash.getHash();
+
+	JSON jbodies = json::Array();
+	for (int k = 0; k < header->numbodyparts; k++) {
+		data.seek(header->bodypartindex + k * sizeof(mstudiobodyparts_t));
+		mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
+
+		JSON jbody = json::Object();
+		JSON jmodels = json::Array();
+
+		for (int i = 0; i < bod->nummodels; i++) {
+			data.seek(bod->modelindex + i * sizeof(mstudiomodel_t));
+			mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
+
+			JSON jmodel = json::Object();
+			int polyCount = 0;
+
+			for (int i = 0; i < mod->nummesh; i++) {
+				data.seek(mod->meshindex + i * sizeof(mstudiomesh_t));
+				mstudiomesh_t* mesh = (mstudiomesh_t*)data.get();
+				polyCount += mesh->numtris;
+			}
+
+			jmodel["name"] = mod->name;
+			jmodel["polys"] = polyCount;
+			jmodel["verts"] = mod->numverts;
+			jmodels.append(jmodel);
+		}
+
+		jbody["name"] = bod->name;
+		jbody["models"] = jmodels;
+		jbodies.append(jbody);
+	}
+
+	JSON jtextures = json::Array();
+	for (int i = 0; i < header->numtextures; i++) {
+		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
+		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
+
+		JSON jtexture = json::Object();
+		jtexture["name"] = texture->name;
+		jtexture["flags"] = texture->flags;
+		jtexture["width"] = texture->width;
+		jtexture["height"] = texture->height;
+		jtextures.append(jtexture);
+	}
+
+	JSON jseqs = json::Array();
+	JSON jevents = json::Array();
+	for (int i = 0; i < header->numseq; i++) {
+		data.seek(header->seqindex + i * sizeof(mstudioseqdesc_t));
+		mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
+
+		
+		for (int k = 0; k < seq->numevents; k++) {
+			data.seek(seq->eventindex + k * sizeof(mstudioevent_t));
+			mstudioevent_t* evt = (mstudioevent_t*)data.get();
+
+			JSON jevent = json::Object();
+			jevent["event"] = evt->event;
+			jevent["type"] = evt->type;
+			jevent["sequence"] = i;
+			jevent["frame"] = evt->frame;
+			jevent["options"] = evt->options;
+			jevents.append(jevent);
+		}
+
+		JSON jseq = json::Object();
+		jseq["name"] = seq->label;
+		jseq["fps"] = seq->fps;
+		jseq["frames"] = seq->numframes;
+		jseqs.append(jseq);
+	}
+
+	JSON jskel = json::Array();
+	for (int i = 0; i < header->numbones; i++) {
+		data.seek(header->boneindex + i * sizeof(mstudiobone_t));
+		mstudiobone_t* bone = (mstudiobone_t*)data.get();
+
+		JSON jbone = json::Object();
+		jbone["name"] = bone->name;
+		jbone["parent"] = bone->parent;
+		jskel.append(jbone);
+	}
+
+	JSON jattachments = json::Array();
+	for (int i = 0; i < header->numattachments; i++) {
+		data.seek(header->attachmentindex + i * sizeof(mstudioattachment_t));
+		mstudioattachment_t* att = (mstudioattachment_t*)data.get();
+
+		JSON jatt = json::Object();
+		jatt["name"] = att->name;
+		jatt["bone"] = att->bone;
+		jatt["type"] = att->type;
+		jattachments.append(jatt);
+	}
+
+	JSON jctls = json::Array();
+	for (int i = 0; i < header->numbonecontrollers; i++) {
+		data.seek(header->bonecontrollerindex + i * sizeof(mstudiobonecontroller_t));
+		mstudiobonecontroller_t* ctl = (mstudiobonecontroller_t*)data.get();
+
+		JSON jctl = json::Object();
+		jctl["type"] = ctl->type;
+		jctl["index"] = ctl->index;
+		jctl["bone"] = ctl->bone;
+		jctl["start"] = ctl->start;
+		jctl["end"] = ctl->end;
+		jctl["rest"] = ctl->rest;
+		jctls.append(jctl);
+	}
+
+	obj["name"] = header->name;
+	obj["textures"] = jtextures;
+	obj["bodies"] = jbodies;
+	obj["sequences"] = jseqs;
+	obj["events"] = jevents;
+	obj["skeleton"] = jskel;
+	obj["controllers"] = jctls;
+	obj["attachments"] = jattachments;
+	obj["skins"] = header->numskinfamilies;
+	obj["id"] = header->id;
+	obj["version"] = header->version;
+
+	ofstream fout;
+	fout.open(outputPath);
+	fout << obj << endl;
+	fout.close();
 }

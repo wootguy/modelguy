@@ -53,6 +53,11 @@ int rename_texture(string inputFile, string outputFile, string texName, string n
 	return 0;
 }
 
+void dump_info(string inputFile, string outputFile) {
+	Model model(inputFile);
+	model.dump_info(outputFile);
+}
+
 int main(int argc, char* argv[])
 {
 	// parse command-line args
@@ -103,6 +108,14 @@ int main(int argc, char* argv[])
 					newTexName = arg;
 				}
 			}
+			if (command == "info") {
+				if (i == 2) {
+					inputFile = arg;
+				}
+				else if (i == 3) {
+					outputFile = arg;
+				}
+			}
 		}
 
 		if (larg.find("-help") == 0 || argc <= 1)
@@ -116,7 +129,8 @@ int main(int argc, char* argv[])
 			"           If no output file is specified, the external models will also be deleted.\n"
 			"  crop   : Crops a texture to the specified dimensions. Used after compiling model.\n"
 			"           Takes <width>x<height> as parameters.\n"
-			"  rename : Renames a texture. Takes <old name> <new name> as parameters.\n\n"
+			"  rename : Renames a texture. Takes <old name> <new name> as parameters.\n"
+			"  info   : Write model info to a JSON file. Takes <input.mdl> <output.json> as parameters\n\n"
 
 			"\nExamples:\n"
 			"  modelguy merge barney.mdl\n"
@@ -168,6 +182,17 @@ int main(int argc, char* argv[])
 			return 1;
 		}
 		return rename_texture(inputFile, outputFile, texName, newTexName);
+	}
+	else if (command == "info") {
+		if (inputFile.size() == 0) {
+			cout << "ERROR: No input file specified\n";
+			return 1;
+		}
+		if (outputFile.size() == 0) {
+			cout << "ERROR: No output file specified\n";
+			return 1;
+		}
+		dump_info(inputFile, outputFile);
 	}
 	else {
 		cout << "unrecognized command: " << command << endl;
