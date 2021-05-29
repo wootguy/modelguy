@@ -2,6 +2,7 @@
 #include "util.h"
 #include <iostream>
 #include <fstream>
+#include <string.h>
 #include "lib/json.hpp"
 #include "lib/md5.h"
 
