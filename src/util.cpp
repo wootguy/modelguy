@@ -28,3 +28,12 @@ char * loadFile( const string& fileName, int& length)
 	length = (int)size; // surely models will never exceed 2 GB
 	return buffer;
 }
+
+bool invalidChar(char c) {
+	return !(c >= 32 && c < 127);
+}
+
+string sanitize_string(string input) {
+	input.erase(remove_if(input.begin(), input.end(), invalidChar), input.end());
+	return input;
+}
