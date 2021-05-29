@@ -578,7 +578,7 @@ void Model::dump_info(string outputPath) {
 		mergeExternalSequences(false);
 
 	MD5 hash = MD5();
-	hash.add(data.get(), data.size());
+	hash.add(data.getBuffer(), data.size());
 	obj["md5"] = hash.getHash();
 
 	JSON jbodies = json::Array();
