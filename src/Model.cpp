@@ -602,13 +602,13 @@ void Model::dump_info(string outputPath) {
 				polyCount += mesh->numtris;
 			}
 
-			jmodel["name"] = mod->name;
+			jmodel["name"] = sanitize_string(mod->name);
 			jmodel["polys"] = polyCount;
 			jmodel["verts"] = mod->numverts;
 			jmodels.append(jmodel);
 		}
 
-		jbody["name"] = bod->name;
+		jbody["name"] = sanitize_string(bod->name);
 		jbody["models"] = jmodels;
 		jbodies.append(jbody);
 	}
@@ -619,7 +619,7 @@ void Model::dump_info(string outputPath) {
 		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
 
 		JSON jtexture = json::Object();
-		jtexture["name"] = texture->name;
+		jtexture["name"] = sanitize_string(texture->name);
 		jtexture["flags"] = texture->flags;
 		jtexture["width"] = texture->width;
 		jtexture["height"] = texture->height;
@@ -642,12 +642,12 @@ void Model::dump_info(string outputPath) {
 			jevent["type"] = evt->type;
 			jevent["sequence"] = i;
 			jevent["frame"] = evt->frame;
-			jevent["options"] = evt->options;
+			jevent["options"] = sanitize_string(evt->options);
 			jevents.append(jevent);
 		}
 
 		JSON jseq = json::Object();
-		jseq["name"] = seq->label;
+		jseq["name"] = sanitize_string(seq->label);
 		jseq["fps"] = seq->fps;
 		jseq["frames"] = seq->numframes;
 		jseqs.append(jseq);
@@ -659,7 +659,7 @@ void Model::dump_info(string outputPath) {
 		mstudiobone_t* bone = (mstudiobone_t*)data.get();
 
 		JSON jbone = json::Object();
-		jbone["name"] = bone->name;
+		jbone["name"] = sanitize_string(bone->name);
 		jbone["parent"] = bone->parent;
 		jskel.append(jbone);
 	}
@@ -670,7 +670,7 @@ void Model::dump_info(string outputPath) {
 		mstudioattachment_t* att = (mstudioattachment_t*)data.get();
 
 		JSON jatt = json::Object();
-		jatt["name"] = att->name;
+		jatt["name"] = sanitize_string(att->name);
 		jatt["bone"] = att->bone;
 		jatt["type"] = att->type;
 		jattachments.append(jatt);
@@ -691,7 +691,7 @@ void Model::dump_info(string outputPath) {
 		jctls.append(jctl);
 	}
 
-	obj["name"] = header->name;
+	obj["name"] = sanitize_string(header->name);
 	obj["textures"] = jtextures;
 	obj["bodies"] = jbodies;
 	obj["sequences"] = jseqs;

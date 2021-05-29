@@ -8,3 +8,4 @@ bool fileExists(const string& fileName);
 
 char * loadFile( const string& fileName, int& length);
 
+string sanitize_string(string input);
