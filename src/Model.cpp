@@ -59,7 +59,7 @@ bool Model::validate() {
 		}
 
 		for (int k = 0; k < mod->nummesh; k++) {
-			data.seek(mod->meshindex + i * sizeof(mstudiomesh_t));
+			data.seek(mod->meshindex + k * sizeof(mstudiomesh_t));
 
 			if (data.eom()) {
 				cout << "ERROR: Failed to load mesh " + to_string(k) + " in model " + to_string(i) + "\n";
