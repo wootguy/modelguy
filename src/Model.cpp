@@ -74,7 +74,8 @@ bool Model::validate() {
 				return false;
 			}
 
-			data.seek(mesh->triindex + (mesh->numtris * sizeof(mstudiotrivert_t)*3) - 1);
+			// vertex count = 3 for the first tri, then 1 for each additional tri (for strip/fan mode)
+			data.seek(mesh->triindex + (mesh->numtris * sizeof(mstudiotrivert_t) + 2) - 1);
 			if (data.eom()) {
 				cout << "ERROR: Failed to load triangles for mesh " + to_string(k) + " in model " + to_string(i) + "\n";
 				return false;
