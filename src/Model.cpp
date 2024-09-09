@@ -5,6 +5,12 @@
 #include <string.h>
 #include "lib/json.hpp"
 #include "lib/md5.h"
+#include <cstring>
+
+#ifdef _MSC_VER 
+#define strncasecmp _strnicmp
+#define strcasecmp _stricmp
+#endif
 
 using json::JSON;
 
@@ -710,4 +716,50 @@ void Model::dump_info(string outputPath) {
 	fout.open(outputPath);
 	fout << obj << endl;
 	fout.close();
+}
+
+void Model::wavify() {
+	const char* nonstandard_audio_formats[21] = {
+		"aiff", "asf", "asx", "au", "dls", "flac",
+		"fsb", "it", "m3u", "mid", "midi", "mod",
+		"mp2", "ogg", "pls", "s3m", "vag", "wax",
+		"wma", "xm", "xma"
+	};
+	int fmt_len = sizeof(nonstandard_audio_formats) / sizeof(const char*);
+
+	int numConverted = 0;
+
+	for (int i = 0; i < header->numseq; i++) {
+		data.seek(header->seqindex + i * sizeof(mstudioseqdesc_t));
+		mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
+
+		for (int k = 0; k < seq->numevents; k++) {
+			data.seek(seq->eventindex + k * sizeof(mstudioevent_t));
+			mstudioevent_t* evt = (mstudioevent_t*)data.get();
+			std::string val = sanitize_string(evt->options);
+
+			int lastdot = val.rfind(".");
+
+			if (lastdot != -1) {
+				std::string ext = val.substr(lastdot+1);
+
+				bool isBadAudio = false;
+				for (int k = 0; k < fmt_len; k++) {
+					if (!strcasecmp(nonstandard_audio_formats[k], ext.c_str())) {
+						isBadAudio = true;
+						break;
+					}
+				}
+
+				if (isBadAudio) {
+					val = val.substr(0, lastdot + 1) + "wav";
+					strncpy(evt->options, val.c_str(), 64);
+					evt->options[63] = 0;
+					numConverted++;
+				}
+			}
+		}
+	}
+
+	cout << "Applied wav extension to " << numConverted << " audio events" << endl;
 }

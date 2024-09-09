@@ -55,7 +55,15 @@ int rename_texture(string inputFile, string outputFile, string texName, string n
 
 void dump_info(string inputFile, string outputFile) {
 	Model model(inputFile);
+	model.validate();
 	model.dump_info(outputFile);
+}
+
+void wavify(string inputFile, string outputFile) {
+	Model model(inputFile);
+	model.validate();
+	model.wavify();
+	model.write(outputFile);
 }
 
 int main(int argc, char* argv[])
@@ -116,6 +124,14 @@ int main(int argc, char* argv[])
 					outputFile = arg;
 				}
 			}
+			if (command == "wavify") {
+				if (i == 2) {
+					inputFile = arg;
+				}
+				else if (i == 3) {
+					outputFile = arg;
+				}
+			}
 		}
 
 		if (larg.find("-help") == 0 || argc <= 1)
@@ -130,7 +146,8 @@ int main(int argc, char* argv[])
 			"  crop   : Crops a texture to the specified dimensions. Used after compiling model.\n"
 			"           Takes <width>x<height> as parameters.\n"
 			"  rename : Renames a texture. Takes <old name> <new name> as parameters.\n"
-			"  info   : Write model info to a JSON file. Takes <input.mdl> <output.json> as parameters\n\n"
+			"  info   : Write model info to a JSON file. Takes <input.mdl> <output.json> as parameters\n"
+			"  wavify : Apply .wav extension to all events. Takes <input.mdl> <output.json> as parameters\n\n"
 
 			"\nExamples:\n"
 			"  modelguy merge barney.mdl\n"
@@ -193,6 +210,17 @@ int main(int argc, char* argv[])
 			return 1;
 		}
 		dump_info(inputFile, outputFile);
+	}
+	else if (command == "wavify") {
+		if (inputFile.size() == 0) {
+			cout << "ERROR: No input file specified\n";
+			return 1;
+		}
+		if (outputFile.size() == 0) {
+			cout << "ERROR: No output file specified\n";
+			return 1;
+		}
+		wavify(inputFile, outputFile);
 	}
 	else {
 		cout << "unrecognized command: " << command << endl;
