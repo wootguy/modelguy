@@ -41,6 +41,9 @@ public:
 	// write model info to a json file
 	void dump_info(string outputPath);
 
+	// apply .wav extension to all model event sounds
+	void wavify();
+
 private:
 	string fpath;
 
