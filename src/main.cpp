@@ -39,6 +39,21 @@ int crop_texture(string inputFile, string outputFile, string texName, int width,
 	return 0;
 }
 
+int resize_texture(string inputFile, string outputFile, string texName, int width, int height) {
+	Model model(inputFile);
+
+	if (!model.validate())
+		return 1;
+
+	if (!model.resizeTexture(texName, width, height))
+		return 1;
+
+	model.write(outputFile);
+
+	return 0;
+}
+
+
 int rename_texture(string inputFile, string outputFile, string texName, string newTexName) {
 	Model model(inputFile);
 
@@ -97,7 +112,7 @@ int main(int argc, char* argv[])
 					outputFile = arg;
 			}
 
-			if (command == "crop") {
+			if (command == "crop" || command == "resize") {
 				if (i == 2) {
 					texName = arg;
 				}
@@ -143,8 +158,8 @@ int main(int argc, char* argv[])
 			"\n<Commands>\n"
 			"  merge  : Merges external texture and sequence models into the output model.\n"
 			"           If no output file is specified, the external models will also be deleted.\n"
-			"  crop   : Crops a texture to the specified dimensions. Used after compiling model.\n"
-			"           Takes <width>x<height> as parameters.\n"
+			"  crop   : Crops a texture to the specified dimensions. Takes <width>x<height> as parameters.\n"
+			"  resize : Resizes a texture to the specified dimensions. Takes <width>x<height> as parameters.\n"
 			"  rename : Renames a texture. Takes <old name> <new name> as parameters.\n"
 			"  info   : Write model info to a JSON file. Takes <input.mdl> <output.json> as parameters\n"
 			"  wavify : Apply .wav extension to all events. Takes <input.mdl> <output.json> as parameters\n\n"
@@ -184,6 +199,17 @@ int main(int argc, char* argv[])
 			return 1;
 		}
 		return crop_texture(inputFile, outputFile, texName, cropWidth, cropHeight);
+	}
+	else if (command == "resize") {
+		if (texName.size() == 0) {
+			cout << "ERROR: No texture name specified\n";
+			return 1;
+		}
+		if (cropWidth <= 0 || cropHeight <= 0) {
+			cout << "ERROR: Bad resize dimentions: " << cropWidth << "x" << cropHeight << endl;
+			return 1;
+		}
+		return resize_texture(inputFile, outputFile, texName, cropWidth, cropHeight);
 	}
 	else if (command == "rename") {
 		if (texName.size() == 0) {

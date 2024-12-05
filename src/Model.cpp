@@ -6,6 +6,7 @@
 #include "lib/json.hpp"
 #include "lib/md5.h"
 #include <cstring>
+#include "base_resample.h"
 
 #ifdef _MSC_VER 
 #define strncasecmp _strnicmp
@@ -512,6 +513,150 @@ bool Model::cropTexture(string cropName, int newWidth, int newHeight) {
 	}
 
 	cout << "ERROR: No texture found with name '" << cropName << "'\n";
+	return false;
+}
+
+bool Model::resizeTexture(string texName, int newWidth, int newHeight) {
+	for (int i = 0; i < header->numtextures; i++) {
+		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
+		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
+		string name = texture->name;
+
+		if (string(texture->name) != texName) {
+			continue;
+		}
+
+		cout << "Resizing " << texName << " from " << texture->width << "x" << texture->height <<
+			" to " << newWidth << "x" << newHeight << endl;
+
+		float scaleX = (float)newWidth / (float)texture->width;
+		float scaleY = (float)newHeight / (float)texture->height;
+
+		data.seek(texture->index);
+		int oldSize = texture->width * texture->height;
+		int newSize = newWidth * newHeight;
+		int palSize = 256 * 3;
+
+		if (newSize > oldSize) {
+			cout << "Resize failed. New texture size is larger than current size.\n";
+			return false;
+		}
+
+		if (newSize % 8) {
+			cout << "Resize failed. New texture pixel count is not divisible by 8.\n";
+			return false;
+		}
+
+		byte* oldTexData = new byte[oldSize];
+		byte* palette = new byte[palSize];
+		byte* newTexData = new byte[newSize];
+		data.read(oldTexData, oldSize);
+		data.read(palette, palSize);
+
+		byte* oldImage = new byte[oldSize * 3];
+		byte* newImage = new byte[newSize * 3];
+		for (int y = 0; y < texture->height; y++) {
+			for (int x = 0; x < texture->width; x++) {
+				int idx = y * texture->width + x;
+				oldImage[idx*3 + 0] = palette[oldTexData[idx]*3 + 0];
+				oldImage[idx*3 + 1] = palette[oldTexData[idx]*3 + 1];
+				oldImage[idx*3 + 2] = palette[oldTexData[idx]*3 + 2];
+			}
+		}
+
+		base::ResampleImage24((byte*)oldImage, texture->width, texture->height,
+			(byte*)newImage, newWidth, newHeight,
+			base::KernelType::KernelTypeLanczos2);
+
+		for (int y = 0; y < newHeight; y++) {
+			for (int x = 0; x < newWidth; x++) {
+				int idx = y * newWidth + x;
+				int r = newImage[idx * 3 + 0];
+				int g = newImage[idx * 3 + 1];
+				int b = newImage[idx * 3 + 2];
+
+				// use closest color in existing palette
+				int bestDiff = 99999;
+				int bestIdx = 0;
+				for (int k = 0; k < 256; k++) {
+					int pr = palette[k*3 + 0];
+					int pg = palette[k*3 + 1];
+					int pb = palette[k*3 + 2];
+
+					int diff = abs(pr - r) + abs(pg - g) + abs(pb - b);
+					if (diff < bestDiff) {
+						bestDiff = diff;
+						bestIdx = k;
+					}
+				}
+
+				newTexData[idx] = bestIdx;
+			}
+		}
+
+		data.seek(texture->index);
+		data.write(newTexData, newSize);
+		data.write(palette, palSize);
+
+		texture->width = newWidth;
+		texture->height = newHeight;
+
+		size_t removeAt = data.tell();
+		int removeBytes = oldSize - newSize;
+		removeData(removeBytes);
+		updateIndexes(removeAt, -removeBytes);
+
+		header->length = data.size();
+
+		data.seek(header->bodypartindex);
+		mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
+
+		for (int b = 0; b < bod->nummodels; b++) {
+			data.seek(bod->modelindex + b * sizeof(mstudiomodel_t));
+			mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
+
+			if (data.eom()) {
+				cout << "ERROR: Failed to load body " + to_string(i) + "/" + to_string(bod->nummodels) + "\n";
+				return false;
+			}
+
+			for (int k = 0; k < mod->nummesh; k++) {
+				data.seek(mod->meshindex + k * sizeof(mstudiomesh_t));
+
+				if (data.eom()) {
+					cout << "ERROR: Failed to load mesh " + to_string(k) + " in model " + to_string(i) + "\n";
+					return false;
+				}
+
+				mstudiomesh_t* mesh = (mstudiomesh_t*)data.get();
+				
+				if (mesh->skinref != i) {
+					continue;
+				}
+
+				// Update texture coordinates
+				data.seek(mesh->triindex);
+				short* ptricmds = (short*)data.get();
+
+				while (i = *(ptricmds++)) {
+					if (i < 0) {
+						i = -i;
+					}
+
+					// There is data loss here because texture coordinates are stored as pixel offsets.
+					// Textures may shift slightly at low resolutions.
+					for (; i > 0; i--, ptricmds += 4) {
+						ptricmds[2] = roundf((float)ptricmds[2] * scaleX);
+						ptricmds[3] = roundf((float)ptricmds[3] * scaleY);
+					}
+				}
+			}
+		}
+
+		return true;
+	}
+
+	cout << "ERROR: No texture found with name '" << texName << "'\n";
 	return false;
 }
 
