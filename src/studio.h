@@ -1,9 +1,9 @@
 /***
 *
 *	Copyright (c) 1998, Valve LLC. All rights reserved.
-*	
-*	This product contains software technology licensed from Id 
-*	Software, Inc. ("Id Technology").  Id Technology (c) 1996 Id Software, Inc. 
+*
+*	This product contains software technology licensed from Id
+*	Software, Inc. ("Id Technology").  Id Technology (c) 1996 Id Software, Inc.
 *	All Rights Reserved.
 *
 ****/
@@ -40,7 +40,9 @@ Studio models are position independent, so the cache manager can move them.
 #define MAXSTUDIOPIVOTS		256
 #define MAXSTUDIOCONTROLLERS 8
 
-typedef struct 
+#pragma pack(push, 1)
+
+typedef struct
 {
 	int					id;
 	int					version;
@@ -50,10 +52,10 @@ typedef struct
 
 	vec3				eyeposition;	// ideal eye position
 	vec3				min;			// ideal movement hull size
-	vec3				max;			
+	vec3				max;
 
 	vec3				bbmin;			// clipping bounding box
-	vec3				bbmax;		
+	vec3				bbmax;
 
 	int					flags;
 
@@ -64,8 +66,8 @@ typedef struct
 	int					bonecontrollerindex;
 
 	int					numhitboxes;			// complex bounding boxes
-	int					hitboxindex;			
-	
+	int					hitboxindex;
+
 	int					numseq;				// animation sequences
 	int					seqindex;
 
@@ -80,7 +82,7 @@ typedef struct
 	int					numskinfamilies;
 	int					skinindex;
 
-	int					numbodyparts;		
+	int					numbodyparts;
 	int					bodypartindex;
 
 	int					numattachments;		// queryable attachable points
@@ -96,7 +98,7 @@ typedef struct
 } studiohdr_t;
 
 // header for demand loaded sequence group data
-typedef struct 
+typedef struct
 {
 	int					id;
 	int					version;
@@ -106,7 +108,7 @@ typedef struct
 } studioseqhdr_t;
 
 // bones
-typedef struct 
+typedef struct
 {
 	char				name[32];	// bone name for symbolic links
 	int		 			parent;		// parent bone
@@ -118,7 +120,7 @@ typedef struct
 
 
 // bone controllers
-typedef struct 
+typedef struct
 {
 	int					bone;	// -1 == 0
 	int					type;	// X, Y, Z, XR, YR, ZR, M
@@ -134,11 +136,11 @@ typedef struct
 	int					bone;
 	int					group;			// intersection group
 	vec3				bbmin;		// bounding box
-	vec3				bbmax;		
+	vec3				bbmax;
 } mstudiobbox_t;
 
 #ifndef ZONE_H
-typedef void *cache_user_t;
+typedef void* cache_user_t;
 #endif
 
 // demand loaded sequence groups
@@ -146,8 +148,8 @@ typedef struct
 {
 	char				label[32];	// textual name
 	char				name[64];	// file name
-	cache_user_t		cache;		// cache index pointer
-	//int					data;		// hack for group 0
+	int					cache;		// cache index pointer
+	int					data;		// hack for group 0
 } mstudioseqgroup_t;
 
 // sequence descriptions
@@ -169,18 +171,18 @@ typedef struct
 	int					numpivots;	// number of foot pivots
 	int					pivotindex;
 
-	int					motiontype;	
+	int					motiontype;
 	int					motionbone;
 	vec3				linearmovement;
 	int					automoveposindex;
 	int					automoveangleindex;
 
 	vec3				bbmin;		// per sequence bounding box
-	vec3				bbmax;		
+	vec3				bbmax;
 
 	int					numblends;
 	int					animindex;		// mstudioanim_t pointer relative to start of sequence group data
-										// [blend][bone][X, Y, Z, XR, YR, ZR]
+	// [blend][bone][X, Y, Z, XR, YR, ZR]
 
 	int					blendtype[2];	// X, Y, Z, XR, YR, ZR
 	float				blendstart[2];	// starting value
@@ -192,12 +194,12 @@ typedef struct
 	int					entrynode;		// transition node at entry
 	int					exitnode;		// transition node at exit
 	int					nodeflags;		// transition rules
-	
+
 	int					nextseq;		// auto advancing sequences
 } mstudioseqdesc_t;
 
 // events
-typedef struct 
+typedef struct
 {
 	int 				frame;
 	int					event;
@@ -207,7 +209,7 @@ typedef struct
 
 
 // pivots
-typedef struct 
+typedef struct
 {
 	vec3				org;	// pivot point
 	int					start;
@@ -215,7 +217,7 @@ typedef struct
 } mstudiopivot_t;
 
 // attachment
-typedef struct 
+typedef struct
 {
 	char				name[32];
 	int					type;
@@ -230,7 +232,7 @@ typedef struct
 } mstudioanim_t;
 
 // animation frames
-typedef union 
+typedef union
 {
 	struct {
 		byte	valid;
@@ -294,7 +296,7 @@ typedef struct
 
 
 // meshes
-typedef struct 
+typedef struct
 {
 	int					numtris;
 	int					triindex;
@@ -305,18 +307,24 @@ typedef struct
 
 // triangles
 #if 1
-typedef struct 
+typedef struct
 {
 	short				vertindex;		// index into vertex array
 	short				normindex;		// index into normal array
-	short				s,t;			// s,t position on skin
+	short				s, t;			// s,t position on skin
 } mstudiotrivert_t;
 #endif
 
+#pragma pack(pop) 
+
 // lighting options
-#define STUDIO_NF_FLATSHADE		0x0001
-#define STUDIO_NF_CHROME		0x0002
-#define STUDIO_NF_FULLBRIGHT	0x0004
+#define STUDIO_NF_FLATSHADE 0x0001
+#define STUDIO_NF_CHROME 0x0002
+#define STUDIO_NF_FULLBRIGHT 0x0004
+#define STUDIO_NF_NOMIPS 0x0008
+#define STUDIO_NF_ALPHA 0x0010
+#define STUDIO_NF_ADDITIVE 0x0020
+#define STUDIO_NF_MASKED 0x0040
 
 // motion flags
 #define STUDIO_X		0x0001

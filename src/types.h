@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <cstdio>
 #include <cmath>
+#include "vectors.h"
 
 typedef unsigned char byte;
 typedef unsigned int uint;
@@ -13,21 +14,5 @@ typedef uint32_t uint32;
 typedef int16_t int16;
 typedef uint16_t uint16;
 typedef uint8_t uint8;
-
-struct vec3 {
-	float x, y, z;
-
-	inline vec3(float X, float Y, float Z) { x = X; y = Y; z = Z; }
-
-	inline float Length(void) const { return (float)sqrt(x * x + y * y + z * z); }
-
-	inline vec3 Normalize(float len=1.0f) const
-	{
-		float flLen = Length();
-		if (flLen == 0) return vec3(0, 0, 1); // ????
-		flLen = 1 / flLen;
-		return vec3(x * flLen * len, y * flLen * len, z * flLen * len);
-	}
-};
 
 using namespace std;
