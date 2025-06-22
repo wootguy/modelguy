@@ -95,8 +95,18 @@ int get_model_type(string inputFile) {
 }
 
 int view_model(string inputFile) {
-	Renderer renderer = Renderer(inputFile, false);
+	bool legacy = true;
+	bool headless = false;
+	Renderer renderer = Renderer(inputFile, 500, 800, false, headless);
 	renderer.render_loop();
+	return 0;
+}
+
+int image_model(string inputFile, string outputFile, int width, int height) {
+	bool legacy = true;
+	bool headless = true;
+	Renderer renderer = Renderer(inputFile, width, height, false, headless);
+	renderer.create_image(outputFile);
 	return 0;
 }
 
@@ -131,7 +141,7 @@ int main(int argc, char* argv[])
 					outputFile = arg;
 			}
 
-			if (command == "crop" || command == "resize") {
+			if (command == "crop" || command == "resize" || command == "image") {
 				if (i == 2) {
 					texName = arg;
 				}
@@ -142,6 +152,11 @@ int main(int argc, char* argv[])
 				}
 			}
 
+			if (command == "image") {
+				if (i == 4) {
+					outputFile = arg;
+				}
+			}
 			if (command == "rename") {
 				if (i == 2) {
 					texName = arg;
@@ -183,13 +198,15 @@ int main(int argc, char* argv[])
 			"  info   : Write model info to a JSON file. Takes <input.mdl> <output.json> as parameters\n"
 			"  wavify : Apply .wav extension to all events. Takes <input.mdl> <output.json> as parameters\n\n"
 			"  porthl : Port a Sven Co-op player model to Half-Life\n"
-			"  type   : Identify player model type. The return code is unique per mod.\n\n"
-			"  view   : View the model in 3D.\n\n"
+			"  type   : Identify player model type. The return code is unique per mod.\n"
+			"  view   : View the model in 3D.\n"
+			"  image  : Saves a PNG image of the model. Takes <width>x<height> and <output.png> as parameters.\n\n"
 
 			"\nExamples:\n"
 			"  modelguy merge barney.mdl\n"
 			"  modelguy crop face.bmp 100x80 hgrunt.mdl\n"
 			"  modelguy rename hev_arm.bmp Remap1_000_255_255.bmp v_shotgun.mdl\n"
+			"  modelguy image player.mdl 800x400 player.png\n"
 			;
 			return 0;
 		}
@@ -300,6 +317,16 @@ int main(int argc, char* argv[])
 			return 1;
 		}
 		return view_model(inputFile);
+	}
+	else if (command == "image") {
+		if (inputFile.size() == 0) {
+			cout << "ERROR: No input file specified\n";
+			return 1;
+		}
+		if (outputFile.size() == 0 || outputFile == inputFile) {
+			outputFile = replaceString(inputFile, ".mdl", ".png");
+		}
+		return image_model(inputFile, outputFile, cropWidth, cropHeight);
 	}
 	else {
 		cout << "unrecognized command: " << command << endl;

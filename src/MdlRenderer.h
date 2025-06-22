@@ -1,3 +1,4 @@
+#pragma once
 #include "studio.h"
 #include "mstream.h"
 #include "Texture.h"
