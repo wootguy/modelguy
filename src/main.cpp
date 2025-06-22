@@ -1,6 +1,7 @@
 #include "util.h"
 #include "studio.h"
 #include "Model.h"
+#include "Renderer.h"
 #include <string>
 #include <algorithm>
 #include <iostream>
@@ -93,6 +94,12 @@ int get_model_type(string inputFile) {
 	return model.get_model_type();
 }
 
+int view_model(string inputFile) {
+	Renderer renderer = Renderer(inputFile, false);
+	renderer.render_loop();
+	return 0;
+}
+
 int main(int argc, char* argv[])
 {
 	// parse command-line args
@@ -177,6 +184,7 @@ int main(int argc, char* argv[])
 			"  wavify : Apply .wav extension to all events. Takes <input.mdl> <output.json> as parameters\n\n"
 			"  porthl : Port a Sven Co-op player model to Half-Life\n"
 			"  type   : Identify player model type. The return code is unique per mod.\n\n"
+			"  view   : View the model in 3D.\n\n"
 
 			"\nExamples:\n"
 			"  modelguy merge barney.mdl\n"
@@ -285,6 +293,13 @@ int main(int argc, char* argv[])
 			return 1;
 		}
 		return get_model_type(inputFile);
+	}
+	else if (command == "view") {
+		if (inputFile.size() == 0) {
+			cout << "ERROR: No input file specified\n";
+			return 1;
+		}
+		return view_model(inputFile);
 	}
 	else {
 		cout << "unrecognized command: " << command << endl;

@@ -58,3 +58,33 @@ std::string replaceString(std::string subject, std::string search, std::string r
 	}
 	return subject;
 }
+
+float clamp(float val, float min, float max) {
+	if (val > max) {
+		return max;
+	}
+	else if (val < min) {
+		return min;
+	}
+	return val;
+}
+
+// https://stackoverflow.com/questions/1628386/normalise-orientation-between-0-and-360
+float normalizeRangef(const float value, const float start, const float end)
+{
+	const float width = end - start;
+	const float offsetValue = value - start;   // value relative to 0
+
+	return (offsetValue - (floorf(offsetValue / width) * width)) + start;
+	// + start to reset back to start of original range
+}
+
+void expandBoundingBox(vec3 v, vec3& mins, vec3& maxs) {
+	if (v.x > maxs.x) maxs.x = v.x;
+	if (v.y > maxs.y) maxs.y = v.y;
+	if (v.z > maxs.z) maxs.z = v.z;
+
+	if (v.x < mins.x) mins.x = v.x;
+	if (v.y < mins.y) mins.y = v.y;
+	if (v.z < mins.z) mins.z = v.z;
+}
