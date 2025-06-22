@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include "mstream.h"
+#include "ModelType.h"
 
 class Model {
 public:
@@ -15,6 +16,8 @@ public:
 	~Model();
 
 	bool validate();
+
+	bool isExtModel();
 
 	// has a modelT.mdl?
 	bool hasExternalTextures();
@@ -45,6 +48,15 @@ public:
 
 	// apply .wav extension to all model event sounds
 	void wavify();
+
+	// emulate flat shading by pointing all surface normals in the same direction
+	bool hackshade();
+
+	// emulate flatshade effect and resize textures that are too big
+	bool port_to_hl();
+
+	// figure out which mod this player model was made for
+	int get_model_type();
 
 private:
 	string fpath;

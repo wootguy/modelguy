@@ -7,6 +7,7 @@
 #include "lib/md5.h"
 #include <cstring>
 #include "base_resample.h"
+#include <algorithm>
 
 #ifdef _MSC_VER 
 #define strncasecmp _strnicmp
@@ -207,6 +208,16 @@ bool Model::validate() {
 	}
 
 	return true;
+}
+
+bool Model::isExtModel() {
+	if (string(header->name).length() <= 0) {
+		return true;
+	}
+
+	data.seek(header->bodypartindex);
+	mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
+	return data.eom();
 }
 
 bool Model::isEmpty() {
@@ -608,46 +619,58 @@ bool Model::resizeTexture(string texName, int newWidth, int newHeight) {
 
 		header->length = data.size();
 
-		data.seek(header->bodypartindex);
-		mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
+		for (int b = 0; b < header->numbodyparts; b++) {
+			// Try loading required model info
+			data.seek(header->bodypartindex + b * sizeof(mstudiobodyparts_t));
+			mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
 
-		for (int b = 0; b < bod->nummodels; b++) {
-			data.seek(bod->modelindex + b * sizeof(mstudiomodel_t));
-			mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
-
-			if (data.eom()) {
-				cout << "ERROR: Failed to load body " + to_string(i) + "/" + to_string(bod->nummodels) + "\n";
-				return false;
-			}
-
-			for (int k = 0; k < mod->nummesh; k++) {
-				data.seek(mod->meshindex + k * sizeof(mstudiomesh_t));
+			for (int m = 0; m < bod->nummodels; m++) {
+				data.seek(bod->modelindex + m * sizeof(mstudiomodel_t));
+				mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
 
 				if (data.eom()) {
-					cout << "ERROR: Failed to load mesh " + to_string(k) + " in model " + to_string(i) + "\n";
+					cout << "ERROR: Failed to load body " + to_string(m) + "/" + to_string(bod->nummodels) + "\n";
 					return false;
 				}
 
-				mstudiomesh_t* mesh = (mstudiomesh_t*)data.get();
-				
-				if (mesh->skinref != i) {
-					continue;
-				}
+				for (int k = 0; k < mod->nummesh; k++) {
+					data.seek(mod->meshindex + k * sizeof(mstudiomesh_t));
 
-				// Update texture coordinates
-				data.seek(mesh->triindex);
-				short* ptricmds = (short*)data.get();
-
-				while (i = *(ptricmds++)) {
-					if (i < 0) {
-						i = -i;
+					if (data.eom()) {
+						cout << "ERROR: Failed to load mesh " + to_string(k) + " in model " + to_string(m) + "\n";
+						return false;
 					}
 
-					// There is data loss here because texture coordinates are stored as pixel offsets.
-					// Textures may shift slightly at low resolutions.
-					for (; i > 0; i--, ptricmds += 4) {
-						ptricmds[2] = roundf((float)ptricmds[2] * scaleX);
-						ptricmds[3] = roundf((float)ptricmds[3] * scaleY);
+					mstudiomesh_t* mesh = (mstudiomesh_t*)data.get();
+
+					data.seek(header->skinindex);
+					short* skins = (short*)data.get();
+
+					short remappedSkin = skins[mesh->skinref];
+					if (remappedSkin < 0 || remappedSkin >= header->numtextures) {
+						remappedSkin = mesh->skinref;
+					}
+
+					if (remappedSkin != i) {
+						continue;
+					}
+
+					// Update texture coordinates
+					data.seek(mesh->triindex);
+					short* ptricmds = (short*)data.get();
+					int p = 0;
+
+					while (p = *(ptricmds++)) {
+						if (p < 0) {
+							p = -p;
+						}
+
+						// There is data loss here because texture coordinates are stored as pixel offsets.
+						// Textures may shift slightly at low resolutions.
+						for (; p > 0; p--, ptricmds += 4) {
+							ptricmds[2] = roundf((float)ptricmds[2] * scaleX);
+							ptricmds[3] = roundf((float)ptricmds[3] * scaleY);
+						}
 					}
 				}
 			}
@@ -907,4 +930,191 @@ void Model::wavify() {
 	}
 
 	cout << "Applied wav extension to " << numConverted << " audio events" << endl;
+}
+
+bool Model::hackshade() {
+	data.seek(header->skinindex);
+	short* skins = (short*)data.get();
+
+	data.seek(header->textureindex);
+	mstudiotexture_t* textures = (mstudiotexture_t*)data.get();
+	int numFlatshades = 0;
+
+	for (int b = 0; b < header->numbodyparts; b++) {
+		// Try loading required model info
+		data.seek(header->bodypartindex + b * sizeof(mstudiobodyparts_t));
+		mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
+
+		for (int i = 0; i < bod->nummodels; i++) {
+			data.seek(bod->modelindex + i * sizeof(mstudiomodel_t));
+			mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
+
+			data.seek(mod->normindex);
+			vec3* pstudionorms = (vec3*)data.get();
+
+			bool isFlatshaded = false;
+			for (int k = 0; k < mod->nummesh; k++) {
+				data.seek(mod->meshindex + k * sizeof(mstudiomesh_t));
+				mstudiomesh_t* mesh = (mstudiomesh_t*)data.get();
+
+				short remappedSkin = skins[mesh->skinref];
+				if (remappedSkin < 0 || remappedSkin >= header->numtextures) {
+					remappedSkin = mesh->skinref;
+				}
+
+				if (!(textures[remappedSkin].flags & (1 | 4))) {
+					continue; // not flat shaded or fullbright
+				}
+
+				data.seek(mesh->triindex);
+				short* ptricmds = (short*)data.get();
+				int p;
+
+				while (p = *(ptricmds++)) {
+					if (p < 0) {
+						p = -p;
+					}
+
+					for (; p > 0; p--, ptricmds += 4) {
+						pstudionorms[ptricmds[1]] = vec3(0,0,0);
+					}
+				}
+			}
+		}
+	}
+
+	// disable "Flat Shade" and "Fullbright" flags
+	for (int i = 0; i < header->numtextures; i++) {
+		if (textures[i].flags & (1 | 4)) {
+			numFlatshades++;
+			textures[i].flags &= ~(1 | 4);
+		}
+	}
+
+	if (numFlatshades)
+		cout << "Applied flatshade normals for " << numFlatshades << " / " << header->numtextures << " textures" << endl;
+
+	return numFlatshades != 0;
+}
+
+bool Model::port_to_hl() {
+	const int max_hl_pixels = 512 * 512;
+
+	bool anyEdits = hackshade();
+
+	for (int i = 0; i < header->numtextures; i++) {
+		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
+		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
+
+		if (texture->width * texture->height <= max_hl_pixels)
+			continue;
+
+		float scale = sqrt((float)max_hl_pixels / (texture->width * texture->height));
+		int newWidth = texture->width * scale;
+		int newHeight = texture->height * scale;
+
+		resizeTexture(texture->name, newWidth, newHeight);
+		anyEdits = true;
+	}
+
+	if (!anyEdits) {
+		cout << "No porting needed." << endl;
+	}
+
+	return anyEdits;
+}
+
+int Model::get_model_type() {
+	if (isExtModel()) {
+		cout << "Model type: External textures/animations\n";
+		return PMODEL_EXTERNAL;
+	}
+
+	int biggestTextureSize = 0;
+	for (int i = 0; i < header->numtextures; i++) {
+		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
+		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
+		int sz = texture->width * texture->height;;
+		if (sz > biggestTextureSize) {
+			biggestTextureSize = sz;
+		}
+	}
+
+	for (int k = 0; k < header->numseq; k++) {
+		data.seek(header->seqindex + k * sizeof(mstudioseqdesc_t));
+		mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
+
+		for (int i = 0; i < g_modelTypes.size(); i++) {
+			ModelType& mtype = g_modelTypes[i];
+
+			if (biggestTextureSize > mtype.max_texture_size)
+				continue;
+
+			if (k < mtype.anims.size()) {
+				if (mtype.anims[k].activity == seq->activity) {
+					mtype.num_match_act++;
+				}
+				if (string(mtype.anims[k].name) == toLowerCase(seq->label)) {
+					mtype.num_match_name++;
+				}
+			}
+		}
+
+		//printf("{%d, \"%s\"},\n", seq->activity, seq->label);
+	}
+	//printf("\n");
+
+	// match by most animations first (least likely to match = more certainty)
+	std::sort(g_modelTypes.begin(), g_modelTypes.end(), [](const ModelType& a, const ModelType& b) {
+		return a.anims.size() > b.anims.size();
+	});
+
+	float bestMatchPer = 0;
+	float secondBestMatchPer = 0;
+	int bestMatch = -1;
+
+	for (int i = 0; i < g_modelTypes.size(); i++) {
+		ModelType& mtype = g_modelTypes[i];
+
+		// not comparing names because some modelers write their names in animation labels
+		if (mtype.num_match_act == mtype.anims.size()) {
+			cout << "Model type: " << mtype.modname << " (100% match)\n";
+			return mtype.modcode;
+		}
+		
+		float matchPer = (mtype.num_match_act + mtype.num_match_name) / (float)(mtype.anims.size() * 2);
+		mtype.match_percent = matchPer;
+
+		if (matchPer >= bestMatchPer) {
+			secondBestMatchPer = bestMatchPer;
+
+			bestMatchPer = matchPer;
+			bestMatch = i;
+		}
+		else if (matchPer > secondBestMatchPer) {
+			secondBestMatchPer = matchPer;
+		}
+	}
+
+	if ((bestMatchPer > 0.95f && secondBestMatchPer < 0.85f) || (bestMatchPer > 0.90f && secondBestMatchPer < 0.75f)) {
+		ModelType& mtype = g_modelTypes[bestMatch];
+		cout << "Model type: " << mtype.modname << " (" << (int)(bestMatchPer * 100) << "% match)\n";
+		return mtype.modcode;
+	}
+
+	// no exact matches, find fewest errors when considering animation names
+	std::sort(g_modelTypes.begin(), g_modelTypes.end(), [](const ModelType& a, const ModelType& b) {
+		return a.match_percent > b.match_percent;
+	});
+
+	for (int i = 0; i < g_modelTypes.size(); i++) {
+		ModelType& mtype = g_modelTypes[i];
+		if (mtype.match_percent > 0)
+			printf("%-22s = %3d / %-3d  match (%d%%)\n", mtype.modname,
+				mtype.num_match_act + mtype.num_match_name, mtype.anims.size()*2,
+				(int)(mtype.match_percent * 100));
+	}
+
+	cout << "Model type: Unknown\n";
+	return PMODEL_UNKNOWN;
 }

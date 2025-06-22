@@ -38,3 +38,23 @@ string sanitize_string(string input) {
 	input.erase(remove_if(input.begin(), input.end(), invalidChar), input.end());
 	return input;
 }
+
+std::string toLowerCase(std::string str) {
+	std::string out = str;
+
+	for (int i = 0; str[i]; i++) {
+		out[i] = tolower(str[i]);
+	}
+
+	return out;
+}
+
+std::string replaceString(std::string subject, std::string search, std::string replace) {
+	size_t pos = 0;
+	while ((pos = subject.find(search, pos)) != std::string::npos)
+	{
+		subject.replace(pos, search.length(), replace);
+		pos += replace.length();
+	}
+	return subject;
+}
