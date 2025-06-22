@@ -66,12 +66,12 @@ include_directories(src/lib)
 include_directories(glew/include)
 include_directories(${CMAKE_BINARY_DIR})
 
-add_definitions(-DGLEW_STATIC)
-
 if(MSVC)
     # compile using the static runtime
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT /wd4244 /wd4018")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd /wd4244 /wd4018 -DDEBUG_MODE")
+	
+	add_definitions(-DGLEW_STATIC)
 	
 	add_subdirectory(glfw)
 	
@@ -116,7 +116,9 @@ if(MSVC)
 											src/util/vectors.cpp)
   
 else()
-    set(CMAKE_CXX_FLAGS "-Wall")
-    set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -DDEBUG_MODE")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O2 -w")
+	target_link_libraries(${PROJECT_NAME} GLEW OSMesa)
+	
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -Werror=return-type -DDEBUG_MODE")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -g -O2 -w")
 endif()

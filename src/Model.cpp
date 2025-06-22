@@ -492,9 +492,9 @@ bool Model::cropTexture(string cropName, int newWidth, int newHeight) {
 		int oldSize = texture->width * texture->height;
 		int newSize = newWidth * newHeight;
 		int palSize = 256 * 3;
-		byte* oldTexData = new byte[oldSize];
-		byte* palette = new byte[palSize];
-		byte* newTexData = new byte[newSize];
+		uint8_t* oldTexData = new uint8_t[oldSize];
+		uint8_t* palette = new uint8_t[palSize];
+		uint8_t* newTexData = new uint8_t[newSize];
 		data.read(oldTexData, oldSize);
 		data.read(palette, palSize);
 		
@@ -558,14 +558,14 @@ bool Model::resizeTexture(string texName, int newWidth, int newHeight) {
 			return false;
 		}
 
-		byte* oldTexData = new byte[oldSize];
-		byte* palette = new byte[palSize];
-		byte* newTexData = new byte[newSize];
+		uint8_t* oldTexData = new uint8_t[oldSize];
+		uint8_t* palette = new uint8_t[palSize];
+		uint8_t* newTexData = new uint8_t[newSize];
 		data.read(oldTexData, oldSize);
 		data.read(palette, palSize);
 
-		byte* oldImage = new byte[oldSize * 3];
-		byte* newImage = new byte[newSize * 3];
+		uint8_t* oldImage = new uint8_t[oldSize * 3];
+		uint8_t* newImage = new uint8_t[newSize * 3];
 		for (int y = 0; y < texture->height; y++) {
 			for (int x = 0; x < texture->width; x++) {
 				int idx = y * texture->width + x;
@@ -575,8 +575,8 @@ bool Model::resizeTexture(string texName, int newWidth, int newHeight) {
 			}
 		}
 
-		base::ResampleImage24((byte*)oldImage, texture->width, texture->height,
-			(byte*)newImage, newWidth, newHeight,
+		base::ResampleImage24((uint8_t*)oldImage, texture->width, texture->height,
+			(uint8_t*)newImage, newWidth, newHeight,
 			base::KernelType::KernelTypeLanczos2);
 
 		for (int y = 0; y < newHeight; y++) {

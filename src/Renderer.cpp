@@ -5,6 +5,16 @@
 #include "MdlRenderer.h"
 #include "primitives.h"
 #include "lodepng.h"
+#include <cfloat>
+
+#include <GL/glew.h>
+
+#ifdef WIN32
+#include <GLFW/glfw3.h>
+#else
+#define GLAPI extern
+#include <GL/osmesa.h>
+#endif
 
 int glGetErrorDebug() {
 	return glGetError();
@@ -31,6 +41,8 @@ Renderer::Renderer(string fpath, int width, int height, bool legacy_renderer, bo
 	this->fpath = fpath;
 	this->legacy_renderer = legacy_renderer;
 	this->headless = headless;
+	this->windowWidth = width;
+	this->windowHeight = height;
 
 	if (headless) {
 #ifdef WIN32
@@ -43,12 +55,30 @@ Renderer::Renderer(string fpath, int width, int height, bool legacy_renderer, bo
 		valid = create_window(width, height);
 
 	if (valid) {
+		init_gl();
 		mdlShader->bind();
 		this->mdlRenderer = new MdlRenderer(mdlShader, legacy_renderer, fpath);
 	}
 }
 
+void Renderer::init_gl() {
+	// init to black screen instead of white
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+#ifdef WIN32
+	glfwSwapBuffers(window);
+	glfwSwapInterval(1);
+#endif
+
+	glCheckError("glfw buffer setup");
+
+	compile_shaders();
+
+	glCheckError("compiling shaders");
+}
+
 bool Renderer::create_window(int width, int height) {
+#ifdef WIN32
 	if (!glfwInit())
 	{
 		printf("GLFW initialization failed\n");
@@ -73,50 +103,33 @@ bool Renderer::create_window(int width, int height) {
 
 	glfwSetWindowSizeLimits(window, 250, 50, GLFW_DONT_CARE, GLFW_DONT_CARE);
 	glfwMakeContextCurrent(window);
-	
-	glCheckError("glfw init");
-	
-	glewInit();
 
-	glCheckError("glew init");
-
-	// init to black screen instead of white
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	// give ImGui something to push/pop to
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-
-	glfwSwapBuffers(window);
-	glfwSwapInterval(1);
-
-	glCheckError("glfw buffer setup");
-
-	compile_shaders();
-
-	glCheckError("compiling shaders");
-
+	GLenum err = glewInit();
+	if (err != GLEW_OK) {
+		printf("Failed to initialize GLEW: %s\n", glewGetErrorString(err));
+		return false;
+	}
+#endif
 	return true;
 }
 
 bool Renderer::create_headless_context(int width, int height) {
 #ifndef WIN32
-	/* Create an RGBA-mode context */
-#if OSMESA_MAJOR_VERSION * 100 + OSMESA_MINOR_VERSION >= 305
-/* specify Z, stencil, accum sizes */
-	OSMesaContext ctx = OSMesaCreateContextExt(GL_RGBA, 16, 0, 0, NULL);
-#else
-	OSMesaContext ctx = OSMesaCreateContext(GL_RGBA, NULL);
-#endif
+	const int attribs[] = {
+		OSMESA_FORMAT, OSMESA_RGBA,
+		OSMESA_DEPTH_BITS, 16,
+		OSMESA_PROFILE, OSMESA_COMPAT_PROFILE,
+		0
+	};
+	OSMesaContext ctx = OSMesaCreateContextAttribs(attribs, NULL);
+
 	if (!ctx) {
 		printf("OSMesaCreateContext failed!\n");
 		return false;
 	}
 
 	/* Allocate the image buffer */
-	mesa3d_buffer = (unsigned char*)malloc(width * height * 4 * sizeof(unsigned char));
+	mesa3d_buffer = (unsigned char*)aligned_alloc(16, width * height * 4);
 	if (!mesa3d_buffer) {
 		printf("Alloc image buffer failed!\n");
 		return false;
@@ -127,6 +140,52 @@ bool Renderer::create_headless_context(int width, int height) {
 		printf("OSMesaMakeCurrent failed!\n");
 		return false;
 	}
+
+	//GLenum err = glewInit();
+	//if (err != GLEW_OK) {
+		//printf("Failed to initialize GLEW: %s\n", glewGetErrorString(err));
+		//return;
+	//}
+
+	// GLEW is failing to initialize and I don't know why, so load gl functions manually
+	glCreateShader = (PFNGLCREATESHADERPROC)OSMesaGetProcAddress("glCreateShader");
+	glShaderSource = (PFNGLSHADERSOURCEPROC)OSMesaGetProcAddress("glShaderSource");
+	glCompileShader = (PFNGLCOMPILESHADERPROC)OSMesaGetProcAddress("glCompileShader");
+	glGetShaderiv = (PFNGLGETSHADERIVPROC)OSMesaGetProcAddress("glGetShaderiv");
+	glGetShaderInfoLog = (PFNGLGETSHADERINFOLOGPROC)OSMesaGetProcAddress("glGetShaderInfoLog");
+	glDeleteShader = (PFNGLDELETESHADERPROC)OSMesaGetProcAddress("glDeleteShader");
+	glCreateProgram = (PFNGLCREATEPROGRAMPROC)OSMesaGetProcAddress("glCreateProgram");
+	glAttachShader = (PFNGLATTACHSHADERPROC)OSMesaGetProcAddress("glAttachShader");
+	glLinkProgram = (PFNGLLINKPROGRAMPROC)OSMesaGetProcAddress("glLinkProgram");
+	glUseProgram = (PFNGLUSEPROGRAMPROC)OSMesaGetProcAddress("glUseProgram");
+	glDeleteProgram = (PFNGLDELETEPROGRAMPROC)OSMesaGetProcAddress("glDeleteProgram");
+	glDetachShader = (PFNGLDETACHSHADERPROC)OSMesaGetProcAddress("glDetachShader");
+	glUniform1f = (PFNGLUNIFORM1FPROC)OSMesaGetProcAddress("glUniform1f");
+	glUniform2f = (PFNGLUNIFORM2FPROC)OSMesaGetProcAddress("glUniform2f");
+	glUniform3f = (PFNGLUNIFORM3FPROC)OSMesaGetProcAddress("glUniform3f");
+	glUniform4f = (PFNGLUNIFORM4FPROC)OSMesaGetProcAddress("glUniform4f");
+	glUniform1i = (PFNGLUNIFORM1IPROC)OSMesaGetProcAddress("glUniform1i");
+	glUniform2i = (PFNGLUNIFORM2IPROC)OSMesaGetProcAddress("glUniform2i");
+	glUniform3i = (PFNGLUNIFORM3IPROC)OSMesaGetProcAddress("glUniform3i");
+	glUniform4i = (PFNGLUNIFORM4IPROC)OSMesaGetProcAddress("glUniform4i");
+	glUniformMatrix2fv = (PFNGLUNIFORMMATRIX2FVPROC)OSMesaGetProcAddress("glUniformMatrix2fv");
+	glUniformMatrix3fv = (PFNGLUNIFORMMATRIX3FVPROC)OSMesaGetProcAddress("glUniformMatrix3fv");
+	glUniformMatrix4fv = (PFNGLUNIFORMMATRIX4FVPROC)OSMesaGetProcAddress("glUniformMatrix4fv");
+	glGetUniformLocation = (PFNGLGETUNIFORMLOCATIONPROC)OSMesaGetProcAddress("glGetUniformLocation");
+	glGetAttribLocation = (PFNGLGETATTRIBLOCATIONPROC)OSMesaGetProcAddress("glGetAttribLocation");
+	glGetProgramiv = (PFNGLGETPROGRAMIVPROC)OSMesaGetProcAddress("glGetProgramiv");
+	glGetProgramInfoLog = (PFNGLGETPROGRAMINFOLOGPROC)OSMesaGetProcAddress("glGetProgramInfoLog");
+	glGenVertexArrays = (PFNGLGENVERTEXARRAYSPROC)OSMesaGetProcAddress("glGenVertexArrays");
+	glBindVertexArray = (PFNGLBINDVERTEXARRAYPROC)OSMesaGetProcAddress("glBindVertexArray");
+	glGenBuffers = (PFNGLGENBUFFERSPROC)OSMesaGetProcAddress("glGenBuffers");
+	glBindBuffer = (PFNGLBINDBUFFERPROC)OSMesaGetProcAddress("glBindBuffer");
+	glBufferData = (PFNGLBUFFERDATAPROC)OSMesaGetProcAddress("glBufferData");
+	glBufferSubData = (PFNGLBUFFERSUBDATAPROC)OSMesaGetProcAddress("glBufferSubData");
+	glDeleteBuffers = (PFNGLDELETEBUFFERSPROC)OSMesaGetProcAddress("glDeleteBuffers");
+	glEnableVertexAttribArray = (PFNGLENABLEVERTEXATTRIBARRAYPROC)OSMesaGetProcAddress("glEnableVertexAttribArray");
+	glDisableVertexAttribArray = (PFNGLDISABLEVERTEXATTRIBARRAYPROC)OSMesaGetProcAddress("glDisableVertexAttribArray");
+	glVertexAttribPointer = (PFNGLVERTEXATTRIBPOINTERPROC)OSMesaGetProcAddress("glVertexAttribPointer");
+	glActiveTexture = (PFNGLACTIVETEXTUREPROC)OSMesaGetProcAddress("glActiveTexture");
 #endif
 
 	return true;
@@ -236,14 +295,17 @@ void Renderer::setup_render() {
 }
 
 void Renderer::render() {
-	glClearColor(0, 0, 0, 0);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+#ifdef WIN32
 	glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
+#endif
+
 	glViewport(0, 0, windowWidth, windowHeight);
 	projection.perspective(fov, (float)windowWidth / (float)windowHeight, zNear, zFar);
 	view.loadIdentity();
 	model.loadIdentity();
+
+	glClearColor(0, 0, 0, 0);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	if (headless)
 		projection(5) *= -1;
@@ -259,6 +321,7 @@ void Renderer::render_loop() {
 		return;
 	}
 
+#ifdef WIN32
 	setup_render();
 
 	while (!glfwWindowShouldClose(window)) {
@@ -271,17 +334,24 @@ void Renderer::render_loop() {
 	}
 
 	glfwTerminate();
+#endif
 }
 
 void Renderer::create_image(string outPath) {
+	if (!valid) {
+		printf("Aborting render. Context creation failed.\n");
+		return;
+	}
 	setup_render();
 	render();
-	
+	glFlush();
+
 #ifdef WIN32
 	uint8_t* pixels = new uint8_t[windowWidth * windowHeight * 4];
 	glReadPixels(0, 0, windowWidth, windowHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	lodepng_encode32_file(outPath.c_str(), pixels, windowWidth, windowHeight);
 	delete[] pixels;
 #else
-	lodepng_encode32_file(outPath.c_str(), mesa32_buffer, windowWidth, windowHeight);
+	lodepng_encode32_file(outPath.c_str(), mesa3d_buffer, windowWidth, windowHeight);
 #endif
 }
