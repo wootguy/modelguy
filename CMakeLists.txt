@@ -30,6 +30,7 @@ set(SOURCE_FILES
 	
 	src/lib/json.hpp
 	src/lib/md5.h		src/lib/md5.cpp
+	src/lib/lodepng.h	src/lib/lodepng.cpp
 )
 
 set(SHADER_FILES

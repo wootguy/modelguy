@@ -4,6 +4,7 @@
 #include "util.h"
 #include "MdlRenderer.h"
 #include "primitives.h"
+#include "lodepng.h"
 
 int glGetErrorDebug() {
 	return glGetError();
@@ -26,16 +27,28 @@ void error_callback(int error, const char* description)
 	printf("GLFW Error: %s\n", description);
 }
 
-Renderer::Renderer(string fpath, bool legacy_renderer) {
+Renderer::Renderer(string fpath, int width, int height, bool legacy_renderer, bool headless) {
+	this->fpath = fpath;
 	this->legacy_renderer = legacy_renderer;
+	this->headless = headless;
 
-	create_window();
+	if (headless) {
+#ifdef WIN32
+		valid = create_window(width, height);
+#else
+		valid = create_headless_context(width, height);
+#endif
+	}
+	else
+		valid = create_window(width, height);
 
-	mdlShader->bind();
-	this->mdlRenderer = new MdlRenderer(mdlShader, legacy_renderer, fpath);
+	if (valid) {
+		mdlShader->bind();
+		this->mdlRenderer = new MdlRenderer(mdlShader, legacy_renderer, fpath);
+	}
 }
 
-bool Renderer::create_window() {
+bool Renderer::create_window(int width, int height) {
 	if (!glfwInit())
 	{
 		printf("GLFW initialization failed\n");
@@ -48,7 +61,11 @@ bool Renderer::create_window() {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
 
-	window = glfwCreateWindow(500, 800, "modelguy", NULL, NULL);
+	if (headless) {
+		glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+	}
+
+	window = glfwCreateWindow(width, height, "modelguy", NULL, NULL);
 
 	if (!window) {
 		return false;
@@ -80,6 +97,39 @@ bool Renderer::create_window() {
 	compile_shaders();
 
 	glCheckError("compiling shaders");
+
+	return true;
+}
+
+bool Renderer::create_headless_context(int width, int height) {
+#ifndef WIN32
+	/* Create an RGBA-mode context */
+#if OSMESA_MAJOR_VERSION * 100 + OSMESA_MINOR_VERSION >= 305
+/* specify Z, stencil, accum sizes */
+	OSMesaContext ctx = OSMesaCreateContextExt(GL_RGBA, 16, 0, 0, NULL);
+#else
+	OSMesaContext ctx = OSMesaCreateContext(GL_RGBA, NULL);
+#endif
+	if (!ctx) {
+		printf("OSMesaCreateContext failed!\n");
+		return false;
+	}
+
+	/* Allocate the image buffer */
+	mesa3d_buffer = (unsigned char*)malloc(width * height * 4 * sizeof(unsigned char));
+	if (!mesa3d_buffer) {
+		printf("Alloc image buffer failed!\n");
+		return false;
+	}
+
+	/* Bind the buffer to the context and make it current */
+	if (!OSMesaMakeCurrent(ctx, mesa3d_buffer, GL_UNSIGNED_BYTE, width, height)) {
+		printf("OSMesaMakeCurrent failed!\n");
+		return false;
+	}
+#endif
+
+	return true;
 }
 
 void Renderer::compile_shaders() {
@@ -171,43 +221,50 @@ float Renderer::get_model_fit_distance(vec3 modelOrigin, vec3 modelAngles) {
 	return max(i_width, i_height) + (targetWidth * 0.5f);
 }
 
-void Renderer::render_loop() {
+void Renderer::setup_render() {
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
-	glCullFace(GL_FRONT);
 	glEnable(GL_TEXTURE_2D);
 	glActiveTexture(GL_TEXTURE0);
 
-	EntRenderOpts renderOpts;
 	memset(&renderOpts, 0, sizeof(EntRenderOpts));
 	renderOpts.scale = 1.0f;
 	renderOpts.framerate = 1.0f;
 	renderOpts.rendercolor = COLOR3(255, 255, 255);
 
-	vec3 cameraOrigin = vec3();
-	vec3 cameraRight = vec3(1, 0, 0);
+	glCullFace(headless ? GL_BACK : GL_FRONT);
+}
 
-	vec3 modelAngles = vec3(0, 0, 0);
-	vec3 modelOrigin = vec3(0, 0, 0);
+void Renderer::render() {
+	glClearColor(0, 0, 0, 0);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	vec3 ori;
+	glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
+	glViewport(0, 0, windowWidth, windowHeight);
+	projection.perspective(fov, (float)windowWidth / (float)windowHeight, zNear, zFar);
+	view.loadIdentity();
+	model.loadIdentity();
 
-	float lastFrameTime = glfwGetTime();
+	if (headless)
+		projection(5) *= -1;
+
+	modelAngles.y = normalizeRangef(modelAngles.y + 0.5f, 0, 360);
+	modelOrigin.y = max(modelOrigin.y, get_model_fit_distance(modelOrigin, modelAngles));
+	mdlRenderer->draw(modelOrigin, modelAngles, renderOpts, cameraOrigin, cameraRight);
+}
+
+void Renderer::render_loop() {
+	if (!valid) {
+		printf("Aborting render. Context creation failed.\n");
+		return;
+	}
+
+	setup_render();
+
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
-		glClearColor(0, 0, 64, 255);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-		glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
-		glViewport(0, 0, windowWidth, windowHeight);
-		projection.perspective(fov, (float)windowWidth / (float)windowHeight, zNear, zFar);
-		view.loadIdentity();
-		model.loadIdentity();
-
-		modelAngles.y = normalizeRangef(modelAngles.y + 0.5f, 0, 360);
-		modelOrigin.y = max(modelOrigin.y, get_model_fit_distance(modelOrigin, modelAngles));
-		mdlRenderer->draw(modelOrigin, modelAngles, renderOpts, cameraOrigin, cameraRight);
+		render();
 
 		glfwSwapBuffers(window);
 		glCheckError("Swap buffers and controls");
@@ -216,3 +273,15 @@ void Renderer::render_loop() {
 	glfwTerminate();
 }
 
+void Renderer::create_image(string outPath) {
+	setup_render();
+	render();
+	
+#ifdef WIN32
+	uint8_t* pixels = new uint8_t[windowWidth * windowHeight * 4];
+	glReadPixels(0, 0, windowWidth, windowHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	delete[] pixels;
+#else
+	lodepng_encode32_file(outPath.c_str(), mesa32_buffer, windowWidth, windowHeight);
+#endif
+}
