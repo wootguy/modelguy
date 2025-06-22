@@ -81,6 +81,18 @@ void wavify(string inputFile, string outputFile) {
 	model.write(outputFile);
 }
 
+void port_hl(string inputFile, string outputFile) {
+	Model model(inputFile);
+	model.validate();
+	model.port_to_hl();
+	model.write(outputFile);
+}
+
+int get_model_type(string inputFile) {
+	Model model(inputFile);
+	return model.get_model_type();
+}
+
 int main(int argc, char* argv[])
 {
 	// parse command-line args
@@ -163,6 +175,8 @@ int main(int argc, char* argv[])
 			"  rename : Renames a texture. Takes <old name> <new name> as parameters.\n"
 			"  info   : Write model info to a JSON file. Takes <input.mdl> <output.json> as parameters\n"
 			"  wavify : Apply .wav extension to all events. Takes <input.mdl> <output.json> as parameters\n\n"
+			"  porthl : Port a Sven Co-op player model to Half-Life\n"
+			"  type   : Identify player model type. The return code is unique per mod.\n\n"
 
 			"\nExamples:\n"
 			"  modelguy merge barney.mdl\n"
@@ -178,8 +192,14 @@ int main(int argc, char* argv[])
 		cout << "ERROR: No input file specified.\n";
 		return 1;
 	}
-	if (outputFile.size() == 0)
-		outputFile = inputFile;
+	if (outputFile.size() == 0) {
+		if (command == "info") {
+			outputFile = replaceString(inputFile, ".mdl", ".json");
+		}
+		else {
+			outputFile = inputFile;
+		}
+	}
 
 	if (!fileExists(inputFile)) {
 		cout << "ERROR: File does not exist: " << inputFile << endl;
@@ -247,6 +267,24 @@ int main(int argc, char* argv[])
 			return 1;
 		}
 		wavify(inputFile, outputFile);
+	}
+	else if (command == "porthl") {
+		if (inputFile.size() == 0) {
+			cout << "ERROR: No input file specified\n";
+			return 1;
+		}
+		if (outputFile.size() == 0) {
+			cout << "ERROR: No output file specified\n";
+			return 1;
+		}
+		port_hl(inputFile, outputFile);
+	}
+	else if (command == "type") {
+		if (inputFile.size() == 0) {
+			cout << "ERROR: No input file specified\n";
+			return 1;
+		}
+		return get_model_type(inputFile);
 	}
 	else {
 		cout << "unrecognized command: " << command << endl;
