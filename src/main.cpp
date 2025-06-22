@@ -97,7 +97,7 @@ int get_model_type(string inputFile) {
 int view_model(string inputFile) {
 	bool legacy = true;
 	bool headless = false;
-	Renderer renderer = Renderer(inputFile, 500, 800, false, headless);
+	Renderer renderer = Renderer(inputFile, 500, 800, legacy, headless);
 	renderer.render_loop();
 	return 0;
 }
@@ -105,7 +105,7 @@ int view_model(string inputFile) {
 int image_model(string inputFile, string outputFile, int width, int height) {
 	bool legacy = true;
 	bool headless = true;
-	Renderer renderer = Renderer(inputFile, width, height, false, headless);
+	Renderer renderer = Renderer(inputFile, width, height, legacy, headless);
 	renderer.create_image(outputFile);
 	return 0;
 }

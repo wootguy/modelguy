@@ -6,6 +6,7 @@
 #include "mat4x4.h"
 #include <float.h>
 #include "Renderer.h"
+#include <cstring>
 
 void glCheckError(const char* checkMessage);
 
@@ -930,7 +931,7 @@ void MdlRenderer::CalcBoneQuaternion(const int frame, const float s, const mstud
 		}
 		else
 		{
-			mstudioanimvalue_t* panimvalue = (mstudioanimvalue_t*)((byte*)panim + panim->offset[j + 3]);
+			mstudioanimvalue_t* panimvalue = (mstudioanimvalue_t*)((uint8_t*)panim + panim->offset[j + 3]);
 			int k = frame;
 			while (panimvalue->num.total <= k)
 			{
@@ -1001,7 +1002,7 @@ void MdlRenderer::CalcBonePosition(const int frame, const float s, const mstudio
 		pos[j] = pbone->value[j]; // default;
 		if (panim->offset[j] != 0)
 		{
-			auto panimvalue = (mstudioanimvalue_t*)((byte*)panim + panim->offset[j]);
+			auto panimvalue = (mstudioanimvalue_t*)((uint8_t*)panim + panim->offset[j]);
 
 			auto k = frame;
 			// find span of values that includes the frame we want
@@ -1385,11 +1386,11 @@ void MdlRenderer::draw(vec3 origin, vec3 angles, EntRenderOpts& opts, vec3 viewe
 	}
 	oldLegacyMode = legacyMode;
 
-	float now = glfwGetTime();
+	uint64_t now = getEpochMillis();
 	if (lastDrawCall == 0) {
 		lastDrawCall = now;
 	}
-	float deltaTime = now - lastDrawCall;
+	float deltaTime = TimeDifference(lastDrawCall, now);
 	lastDrawCall = now;
 
 	opts.sequence = clamp(opts.sequence, 0, header->numseq - 1);

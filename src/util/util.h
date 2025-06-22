@@ -22,3 +22,7 @@ float clamp(float val, float min, float max);
 float normalizeRangef(const float value, const float start, const float end);
 
 void expandBoundingBox(vec3 v, vec3& mins, vec3& maxs);
+
+uint64_t getEpochMillis();
+
+double TimeDifference(uint64_t start, uint64_t end);

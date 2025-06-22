@@ -124,7 +124,7 @@ private:
 	vec3 transformedNormals[MAXSTUDIOVERTS];
 
 	float drawFrame = 0;
-	float lastDrawCall = 0;
+	uint64_t lastDrawCall = 0;
 
 	bool loadTextureData();
 	bool loadSequenceData();

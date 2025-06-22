@@ -235,8 +235,8 @@ typedef struct
 typedef union
 {
 	struct {
-		byte	valid;
-		byte	total;
+		uint8_t	valid;
+		uint8_t	total;
 	} num;
 	short		value;
 } mstudioanimvalue_t;

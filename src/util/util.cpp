@@ -3,6 +3,9 @@
 #include <fstream>
 #include <string>
 #include <algorithm>
+#include <chrono>
+
+using namespace std::chrono;
 
 bool fileExists(const string& fileName)
 {
@@ -87,4 +90,17 @@ void expandBoundingBox(vec3 v, vec3& mins, vec3& maxs) {
 	if (v.x < mins.x) mins.x = v.x;
 	if (v.y < mins.y) mins.y = v.y;
 	if (v.z < mins.z) mins.z = v.z;
+}
+
+uint64_t getEpochMillis() {
+	return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+}
+
+double TimeDifference(uint64_t start, uint64_t end) {
+	if (end > start) {
+		return (end - start) / 1000.0;
+	}
+	else {
+		return -((start - end) / 1000.0);
+	}
 }

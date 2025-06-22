@@ -1,10 +1,9 @@
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
 #include "ShaderProgram.h"
 #include "colors.h"
 #include "MdlRenderer.h"
 
 class Model;
+class GLFWwindow;
 
 class Renderer {
 public:
@@ -21,7 +20,7 @@ private:
 	bool legacy_renderer;
 	bool headless;
 	bool valid;
-	void* mesa3d_buffer;
+	uint8_t* mesa3d_buffer;
 
 	GLFWwindow* window;
 	ShaderProgram* mdlShader = NULL;
@@ -50,6 +49,7 @@ private:
 	void render();
 	bool create_window(int width, int height);
 	bool create_headless_context(int width, int height);
+	void init_gl();
 	void compile_shaders();
 	float get_model_fit_distance(vec3 modelOrigin, vec3 modelAngles); // get distance needed to fit the model to the rendering window
 	void drawBoxOutline(vec3 center, vec3 mins, vec3 maxs, COLOR4 color);
