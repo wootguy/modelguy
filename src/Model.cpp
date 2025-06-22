@@ -223,15 +223,19 @@ bool Model::isExtModel() {
 bool Model::isEmpty() {
 	bool isEmptyModel = true;
 
-	data.seek(header->bodypartindex);
-	mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
-	for (int i = 0; i < bod->nummodels; i++) {
-		data.seek(bod->modelindex + i * sizeof(mstudiomodel_t));
-		mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
+	for (int b = 0; b < header->numbodyparts; b++) {
+		// Try loading required model info
+		data.seek(header->bodypartindex + b * sizeof(mstudiobodyparts_t));
+		mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
 
-		if (mod->nummesh != 0) {
-			isEmptyModel = false;
-			break;
+		for (int i = 0; i < bod->nummodels; i++) {
+			data.seek(bod->modelindex + i * sizeof(mstudiomodel_t));
+			mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
+
+			if (mod->nummesh != 0) {
+				isEmptyModel = false;
+				break;
+			}
 		}
 	}
 
