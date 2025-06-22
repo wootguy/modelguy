@@ -22,6 +22,7 @@ set(SOURCE_FILES
 	src/Renderer.cpp		src/Renderer.h
 	src/MdlRenderer.cpp		src/MdlRenderer.h
 	
+	src/gl/primitives.cpp		src/gl/primitives.h
 	src/gl/Shader.cpp			src/gl/Shader.h
 	src/gl/ShaderProgram.cpp	src/gl/ShaderProgram.h
 	src/gl/Texture.cpp			src/gl/Texture.h
@@ -32,6 +33,9 @@ set(SOURCE_FILES
 )
 
 set(SHADER_FILES
+	src/shaders/cvert_vert.glsl
+	src/shaders/cvert_frag.glsl
+	
 	src/shaders/mdl_vert.glsl
 	src/shaders/mdl_frag.glsl
 	src/shaders/mdl_legacy_vert.glsl
