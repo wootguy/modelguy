@@ -1002,6 +1002,9 @@ bool Model::hackshade() {
 }
 
 bool Model::port_to_hl() {
+	// TODO:
+	// - rename color remap textures that arent called DM_Base
+	// - reorder animations
 	const int max_hl_pixels = 512 * 512;
 
 	bool anyEdits = hackshade();
