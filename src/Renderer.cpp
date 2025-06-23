@@ -16,6 +16,8 @@
 #include <GL/osmesa.h>
 #endif
 
+Renderer* g_app;
+
 int glGetErrorDebug() {
 	return glGetError();
 }
@@ -37,12 +39,16 @@ void error_callback(int error, const char* description)
 	printf("GLFW Error: %s\n", description);
 }
 
+void file_drop_callback(GLFWwindow* window, int count, const char** paths) {
+	g_app->load_model(paths[0]);
+}
+
 Renderer::Renderer(string fpath, int width, int height, bool legacy_renderer, bool headless) {
-	this->fpath = fpath;
 	this->legacy_renderer = legacy_renderer;
 	this->headless = headless;
 	this->windowWidth = width;
 	this->windowHeight = height;
+	g_app = this;
 
 	if (headless) {
 #ifdef WIN32
@@ -57,8 +63,19 @@ Renderer::Renderer(string fpath, int width, int height, bool legacy_renderer, bo
 	if (valid) {
 		init_gl();
 		mdlShader->bind();
-		this->mdlRenderer = new MdlRenderer(mdlShader, legacy_renderer, fpath);
+		load_model(fpath);
 	}
+}
+
+void Renderer::load_model(std::string fpath) {
+	this->fpath = fpath;
+	if (mdlRenderer) {
+		delete mdlRenderer;
+	}
+	mdlRenderer = new MdlRenderer(mdlShader, legacy_renderer, fpath);
+
+	modelOrigin = vec3();
+	modelAngles = vec3(0, -90, 0);
 }
 
 void Renderer::init_gl() {
@@ -85,8 +102,6 @@ bool Renderer::create_window(int width, int height) {
 		return false;
 	}
 
-	glfwSetErrorCallback(error_callback);
-
 	//glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
@@ -100,6 +115,9 @@ bool Renderer::create_window(int width, int height) {
 	if (!window) {
 		return false;
 	}
+
+	glfwSetErrorCallback(error_callback);
+	glfwSetDropCallback(window, file_drop_callback);
 
 	glfwSetWindowSizeLimits(window, 250, 50, GLFW_DONT_CARE, GLFW_DONT_CARE);
 	glfwMakeContextCurrent(window);
@@ -257,15 +275,15 @@ void Renderer::drawBoxOutline(vec3 center, vec3 mins, vec3 maxs, COLOR4 color) {
 	buffer.draw(GL_LINES);
 }
 
-float Renderer::get_model_fit_distance(vec3 modelOrigin, vec3 modelAngles) {
+void Renderer::get_model_fit_offsets(vec3 modelOrigin, vec3 modelAngles, float& depthOffset, float& heightOffset) {
 	vec3 mins(FLT_MAX, FLT_MAX, FLT_MAX);
 	vec3 maxs(-FLT_MAX, -FLT_MAX, -FLT_MAX);
 	mdlRenderer->getModelBoundingBox(modelAngles, 0, mins, maxs);
 	mins = mins.flip();
 	maxs = maxs.flip();
 
-	float targetWidth = max(max(fabs(maxs.x), fabs(mins.x)), max(fabs(maxs.z), fabs(mins.z))) * 2;
-	float targetHeight = max(fabs(maxs.y) * 2, fabs(mins.y) * 2);
+	float targetWidth = max(fabs(maxs.x), fabs(mins.x)) * 2;
+	float targetHeight = maxs.y - mins.y;
 
 	// draw bounding box
 	//colorShader->bind();
@@ -277,7 +295,8 @@ float Renderer::get_model_fit_distance(vec3 modelOrigin, vec3 modelAngles) {
 	float i_width = targetWidth / (2.0f * aspect * tanHalfFov);
 	float i_height = targetHeight / (2.0f * tanHalfFov);
 
-	return max(i_width, i_height) + (targetWidth * 0.5f);
+	depthOffset = mins.z + max(i_width, i_height);
+	heightOffset = -(mins.y + (maxs.y - mins.y)*0.5f);
 }
 
 void Renderer::setup_render() {
@@ -290,6 +309,7 @@ void Renderer::setup_render() {
 	renderOpts.scale = 1.0f;
 	renderOpts.framerate = 1.0f;
 	renderOpts.rendercolor = COLOR3(255, 255, 255);
+	renderOpts.body = 255; // default to "cl_himodels = 1" body
 
 	glCullFace(headless ? GL_BACK : GL_FRONT);
 }
@@ -311,7 +331,10 @@ void Renderer::render() {
 		projection(5) *= -1;
 
 	modelAngles.y = normalizeRangef(modelAngles.y + 0.5f, 0, 360);
-	modelOrigin.y = max(modelOrigin.y, get_model_fit_distance(modelOrigin, modelAngles));
+
+	float depthOffset;
+	get_model_fit_offsets(modelOrigin, modelAngles, depthOffset, modelOrigin.z);
+	modelOrigin.y = max(modelOrigin.y, depthOffset);
 	mdlRenderer->draw(modelOrigin, modelAngles, renderOpts, cameraOrigin, cameraRight);
 }
 

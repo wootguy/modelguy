@@ -9,6 +9,8 @@ class Renderer {
 public:
 	Renderer(std::string fpath, int width, int height, bool legacy_renderer, bool headless);
 
+	void load_model(std::string modl);
+
 	void render_loop();
 
 	void create_image(string outPath);
@@ -16,7 +18,7 @@ public:
 private:
 	string fpath;
 	Model* m_model;
-	MdlRenderer* mdlRenderer;
+	MdlRenderer* mdlRenderer = NULL;
 	bool legacy_renderer;
 	bool headless;
 	bool valid;
@@ -51,6 +53,6 @@ private:
 	bool create_headless_context(int width, int height);
 	void init_gl();
 	void compile_shaders();
-	float get_model_fit_distance(vec3 modelOrigin, vec3 modelAngles); // get distance needed to fit the model to the rendering window
+	void get_model_fit_offsets(vec3 modelOrigin, vec3 modelAngles, float& depthOffset, float& heightOffset);
 	void drawBoxOutline(vec3 center, vec3 mins, vec3 maxs, COLOR4 color);
 };

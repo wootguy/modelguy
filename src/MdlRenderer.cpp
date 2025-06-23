@@ -53,7 +53,7 @@ MdlRenderer::~MdlRenderer() {
 
 			delete[] meshBuffers[b];
 		}
-		for (int i = 0; i < MAXSTUDIOSEQUENCES; i++) {
+		for (int i = 0; i < MAXSTUDIOSEQUENCES && i < seqheaders.size(); i++) {
 			if (seqheaders[i].getBuffer())
 				seqheaders[i].freeBuf();
 		}
@@ -397,6 +397,8 @@ void MdlRenderer::upload() {
 
 	glCheckError("MDL bone texture creation");
 }
+
+#include <lodepng.h>
 
 bool MdlRenderer::loadTextureData() {
 	bool externalTextures = hasExternalTextures();
@@ -1322,7 +1324,7 @@ void MdlRenderer::transformVerts(int body, bool forRender, vec3 viewerOrigin, ve
 						buffer.verts[v].normal = transformedNormals[oldNormIdx].flip();
 					}
 
-					if ((buffer.flags & STUDIO_NF_CHROME) && buffer.skinref < header->numtextures) {
+					if ((buffer.flags & STUDIO_NF_CHROME) && buffer.skinref < texheader->numtextures) {
 						Texture* tex = glTextures[buffer.skinref];
 						const float s = 1.0 / (float)tex->width;
 						const float t = 1.0 / (float)tex->height;
@@ -1399,40 +1401,43 @@ void MdlRenderer::draw(vec3 origin, vec3 angles, EntRenderOpts& opts, vec3 viewe
 	}
 
 	glEnable(GL_BLEND);
-	glBlendFunc(GL_ONE, GL_ONE);
 	shader->bind();
+
+	int defaultBlendFunc = GL_ONE_MINUS_SRC_ALPHA;
 
 	switch (opts.rendermode) {
 	default:
 	case RENDER_MODE_NORMAL:
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		defaultBlendFunc = GL_ONE_MINUS_SRC_ALPHA;
 		shader->setUniform("colorMult", vec4(1, 1, 1, 1));
 		break;
 	case RENDER_MODE_SOLID:
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		defaultBlendFunc = GL_ONE_MINUS_SRC_ALPHA;
 		shader->setUniform("colorMult", vec4(1, 1, 1, 1));
 		break;
 	case RENDER_MODE_COLOR:
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		defaultBlendFunc = GL_ONE_MINUS_SRC_ALPHA;
 		shader->setUniform("colorMult", vec4(opts.rendercolor.toVec(), opts.renderamt / 255.0f));
 		break;
 	case RENDER_MODE_TEXTURE:
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		defaultBlendFunc = GL_ONE_MINUS_SRC_ALPHA;
 		shader->setUniform("colorMult", vec4(1, 1, 1, opts.renderamt / 255.0f));
 		break;
 	case RENDER_MODE_GLOW:
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+		defaultBlendFunc = GL_ONE;
 		shader->setUniform("colorMult", vec4(1, 1, 1, opts.renderamt / 255.0f));
 		break;
 	case RENDER_MODE_ADDITIVE:
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+		defaultBlendFunc = GL_ONE;
 		shader->setUniform("colorMult", vec4(1, 1, 1, opts.renderamt / 255.0f));
 		break;
 	}
 
+	glBlendFunc(GL_SRC_ALPHA, defaultBlendFunc);
+
 	shader->setUniform("sTex", 0);
 	shader->setUniform("elights", 1); // number of active lights
-	shader->setUniform("ambient", opts.rendercolor.toVec() * 0.4f); // ambient lighting
+	shader->setUniform("ambient", opts.rendercolor.toVec()); // ambient lighting
 	
 	if (!legacyMode) {
 		shader->setUniform("viewerOrigin", viewerOrigin - origin); // world coordinates
@@ -1445,8 +1450,9 @@ void MdlRenderer::draw(vec3 origin, vec3 angles, EntRenderOpts& opts, vec3 viewe
 	for (int i = 0; i < 4; i++) {
 		memset(lights[i], 0, 3*sizeof(vec3));
 	}
-	lights[0][0] = vec3(1024, 1024, 1024); // light position
-	lights[0][1] = opts.rendercolor.toVec(); // diffuse color
+	float shadelight = 192.0f / 255.0f; // value used in HLMV
+	lights[0][0] = vec3(0, 1024, 0); // light position
+	lights[0][1] = opts.rendercolor.toVec() * shadelight; // diffuse color
 	shader->setUniform("lights", (float*)lights, 4*3*3);
 	glCheckError("setting MDL scene uniforms");
 
@@ -1516,9 +1522,11 @@ void MdlRenderer::draw(vec3 origin, vec3 angles, EntRenderOpts& opts, vec3 viewe
 
 			if (render.flags & STUDIO_NF_ADDITIVE) {
 				shader->setUniform("additiveEnable", 1);
+				glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 			}
 			else {
 				shader->setUniform("additiveEnable", 0);
+				glBlendFunc(GL_SRC_ALPHA, defaultBlendFunc);
 			}
 
 			int flatShade = 0;
