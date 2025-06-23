@@ -1434,6 +1434,7 @@ void MdlRenderer::draw(vec3 origin, vec3 angles, EntRenderOpts& opts, vec3 viewe
 	}
 
 	glBlendFunc(GL_SRC_ALPHA, defaultBlendFunc);
+	glDepthFunc(GL_LEQUAL);
 
 	shader->setUniform("sTex", 0);
 	shader->setUniform("elights", 1); // number of active lights
@@ -1474,8 +1475,10 @@ void MdlRenderer::draw(vec3 origin, vec3 angles, EntRenderOpts& opts, vec3 viewe
 		shader->setUniform("chromeEnable", 0);
 
 		// no way to upload bone data. Do transforms on the CPU (slow!!)
+		// TODO: chrome is wrong, check goldenman.mdl
 		SetUpBones(angles, opts.sequence, drawFrame);
-		transformVerts(opts.body, true);
+		vec3 viewOrigin = origin * -1;
+		transformVerts(opts.body, true, viewOrigin, vec3(0,0,1));
 		needTransform = true;
 	}
 	glActiveTexture(GL_TEXTURE0);
