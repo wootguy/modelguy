@@ -11,9 +11,9 @@
 #include <GL/glew.h>
 #endif
 
-#if defined(WIN32) || defined(EMSCRIPTEN)
 #include <GLFW/glfw3.h>
-#else
+
+#if !defined(WIN32) && !defined(EMSCRIPTEN)
 #define GLAPI extern
 #include <GL/osmesa.h>
 #endif
@@ -114,7 +114,9 @@ void Renderer::reset_view() {
 	}
 }
 void Renderer::resize_view(int width, int height) {
+#if defined(WIN32) || defined(EMSCRIPTEN)
 	glfwSetWindowSize(window, width, height);
+#endif
 }
 
 
