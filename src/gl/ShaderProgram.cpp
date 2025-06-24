@@ -1,4 +1,9 @@
+#ifdef EMSCRIPTEN
+#include <GLES3/gl3.h>
+#else
 #include <GL/glew.h>
+#endif
+
 #include "ShaderProgram.h"
 #include "util.h"
 #include <string.h>

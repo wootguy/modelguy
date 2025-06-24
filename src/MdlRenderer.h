@@ -43,6 +43,7 @@ struct EntRenderOpts {
 	int body;
 	int skin;
 	int sequence;
+	bool wireframe;
 };
 
 enum render_modes {
@@ -62,11 +63,14 @@ public:
 	uint8_t iBlender[2];
 	uint8_t iMouth;
 	float m_Adj[MAXSTUDIOCONTROLLERS];
+	bool valid;
 
 	// convenience state for rendering
 	int lastSequence = 0;
 	vec3 drawOrigin;
 	int drawBody;
+	float drawFrame = 0;
+	uint64_t lastDrawCall = 0;
 
 	MdlRenderer(ShaderProgram* shader, bool legacy_mode, string modelPath);
 	~MdlRenderer();
@@ -84,7 +88,6 @@ public:
 
 private:
 	string fpath;
-	bool valid;
 	bool legacy_mode;
 
 	ShaderProgram* shader;
@@ -122,9 +125,6 @@ private:
 	// for transformverts
 	vec3 transformedVerts[MAXSTUDIOVERTS];
 	vec3 transformedNormals[MAXSTUDIOVERTS];
-
-	float drawFrame = 0;
-	uint64_t lastDrawCall = 0;
 
 	bool loadTextureData();
 	bool loadSequenceData();

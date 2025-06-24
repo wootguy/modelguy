@@ -110,6 +110,8 @@ int image_model(string inputFile, string outputFile, int width, int height) {
 	return 0;
 }
 
+#ifndef EMSCRIPTEN
+
 int main(int argc, char* argv[])
 {
 	// parse command-line args
@@ -335,3 +337,4 @@ int main(int argc, char* argv[])
 	return 0;
 }
 
+#endif

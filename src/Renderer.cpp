@@ -7,9 +7,11 @@
 #include "lodepng.h"
 #include <cfloat>
 
+#ifndef EMSCRIPTEN
 #include <GL/glew.h>
+#endif
 
-#ifdef WIN32
+#if defined(WIN32) || defined(EMSCRIPTEN)
 #include <GLFW/glfw3.h>
 #else
 #define GLAPI extern
@@ -51,7 +53,7 @@ Renderer::Renderer(string fpath, int width, int height, bool legacy_renderer, bo
 	g_app = this;
 
 	if (headless) {
-#ifdef WIN32
+#if defined(WIN32) || defined(EMSCRIPTEN)
 		valid = create_window(width, height);
 #else
 		valid = create_headless_context(width, height);
@@ -63,27 +65,64 @@ Renderer::Renderer(string fpath, int width, int height, bool legacy_renderer, bo
 	if (valid) {
 		init_gl();
 		mdlShader->bind();
-		load_model(fpath);
+		if (fpath.size())
+			load_model(fpath);
 	}
 }
 
-void Renderer::load_model(std::string fpath) {
+bool Renderer::load_model(std::string fpath) {
+	MdlRenderer* newRenderer = new MdlRenderer(mdlShader, legacy_renderer, fpath);
+
+	if (!newRenderer->valid) {
+		printf("Failed to load model: %s\n", fpath.c_str());
+		delete newRenderer;
+		return false;
+	}
+
 	this->fpath = fpath;
+
 	if (mdlRenderer) {
 		delete mdlRenderer;
 	}
-	mdlRenderer = new MdlRenderer(mdlShader, legacy_renderer, fpath);
 
+	mdlRenderer = newRenderer;
+	renderOpts.sequence = 0;
+	reset_view();
+
+	return true;
+}
+
+void Renderer::unload_model() {
+	if (mdlRenderer) {
+		delete mdlRenderer;
+		mdlRenderer = NULL;
+	}
+}
+
+void Renderer::change_animation(int idx) {
+	renderOpts.sequence = idx;
+	reset_view();
+}
+
+void Renderer::reset_view() {
 	modelOrigin = vec3();
 	modelAngles = vec3(0, -90, 0);
+
+	if (mdlRenderer) {
+		mdlRenderer->drawFrame = 0;
+		mdlRenderer->lastDrawCall = 0;
+	}
 }
+void Renderer::resize_view(int width, int height) {
+	glfwSetWindowSize(window, width, height);
+}
+
 
 void Renderer::init_gl() {
 	// init to black screen instead of white
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-#ifdef WIN32
-	glfwSwapBuffers(window);
+#if defined(WIN32)
 	glfwSwapInterval(1);
 #endif
 
@@ -95,7 +134,7 @@ void Renderer::init_gl() {
 }
 
 bool Renderer::create_window(int width, int height) {
-#ifdef WIN32
+#if defined(WIN32) || defined(EMSCRIPTEN)
 	if (!glfwInit())
 	{
 		printf("GLFW initialization failed\n");
@@ -122,17 +161,20 @@ bool Renderer::create_window(int width, int height) {
 	glfwSetWindowSizeLimits(window, 250, 50, GLFW_DONT_CARE, GLFW_DONT_CARE);
 	glfwMakeContextCurrent(window);
 
+#ifndef EMSCRIPTEN
 	GLenum err = glewInit();
 	if (err != GLEW_OK) {
 		printf("Failed to initialize GLEW: %s\n", glewGetErrorString(err));
 		return false;
 	}
 #endif
+
+#endif
 	return true;
 }
 
 bool Renderer::create_headless_context(int width, int height) {
-#ifndef WIN32
+#if !defined(WIN32) && !defined(EMSCRIPTEN)
 	const int attribs[] = {
 		OSMESA_FORMAT, OSMESA_RGBA,
 		OSMESA_DEPTH_BITS, 16,
@@ -278,7 +320,7 @@ void Renderer::drawBoxOutline(vec3 center, vec3 mins, vec3 maxs, COLOR4 color) {
 void Renderer::get_model_fit_offsets(vec3 modelOrigin, vec3 modelAngles, float& depthOffset, float& heightOffset) {
 	vec3 mins(FLT_MAX, FLT_MAX, FLT_MAX);
 	vec3 maxs(-FLT_MAX, -FLT_MAX, -FLT_MAX);
-	mdlRenderer->getModelBoundingBox(modelAngles, 0, mins, maxs);
+	mdlRenderer->getModelBoundingBox(modelAngles, renderOpts.sequence, mins, maxs);
 	mins = mins.flip();
 	maxs = maxs.flip();
 
@@ -302,7 +344,6 @@ void Renderer::get_model_fit_offsets(vec3 modelOrigin, vec3 modelAngles, float& 
 void Renderer::setup_render() {
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
-	glEnable(GL_TEXTURE_2D);
 	glActiveTexture(GL_TEXTURE0);
 
 	memset(&renderOpts, 0, sizeof(EntRenderOpts));
@@ -315,7 +356,7 @@ void Renderer::setup_render() {
 }
 
 void Renderer::render() {
-#ifdef WIN32
+#if defined(WIN32) || defined(EMSCRIPTEN)
 	glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
 #endif
 
@@ -327,10 +368,28 @@ void Renderer::render() {
 	glClearColor(0, 0, 0, 0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+	if (!mdlRenderer)
+		return;
+
 	if (headless)
 		projection(5) *= -1;
 
 	modelAngles.y = normalizeRangef(modelAngles.y + 0.5f, 0, 360);
+	//modelAngles.x = normalizeRangef(modelAngles.x + 0.5f, 0, 360);
+	/*
+	if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
+		modelAngles.y = normalizeRangef(modelAngles.y + 0.5f, 0, 360);
+	}
+	if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
+		modelAngles.y = normalizeRangef(modelAngles.y - 0.5f, 0, 360);
+	}
+	if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
+		modelAngles.x = normalizeRangef(modelAngles.x + 0.5f, 0, 360);
+	}
+	if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
+		modelAngles.x = normalizeRangef(modelAngles.x - 0.5f, 0, 360);
+	}
+	*/
 
 	float depthOffset;
 	get_model_fit_offsets(modelOrigin, modelAngles, depthOffset, modelOrigin.z);
@@ -344,7 +403,7 @@ void Renderer::render_loop() {
 		return;
 	}
 
-#ifdef WIN32
+#if defined(WIN32) || defined(EMSCRIPTEN)
 	setup_render();
 
 	while (!glfwWindowShouldClose(window)) {
@@ -355,8 +414,6 @@ void Renderer::render_loop() {
 		glfwSwapBuffers(window);
 		glCheckError("Swap buffers and controls");
 	}
-
-	glfwTerminate();
 #endif
 }
 
@@ -369,7 +426,7 @@ void Renderer::create_image(string outPath) {
 	render();
 	glFlush();
 
-#ifdef WIN32
+#if defined(WIN32) || defined(EMSCRIPTEN)
 	uint8_t* pixels = new uint8_t[windowWidth * windowHeight * 4];
 	glReadPixels(0, 0, windowWidth, windowHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 	lodepng_encode32_file(outPath.c_str(), pixels, windowWidth, windowHeight);
