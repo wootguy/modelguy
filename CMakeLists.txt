@@ -8,6 +8,7 @@ endif()
 
 set(SOURCE_FILES 
     src/main.cpp
+    src/main_ems.cpp
     src/Model.cpp		src/Model.h
     src/ModelType.cpp	src/ModelType.h
 	src/studio.h
@@ -114,7 +115,15 @@ if(MSVC)
 											src/util/mat4x4.cpp
 											src/util/colors.cpp
 											src/util/vectors.cpp)
-  
+
+elseif(EMSCRIPTEN)		
+	set(CMAKE_EXECUTABLE_SUFFIX ".html")
+	set(SHELL_FILE ${CMAKE_CURRENT_SOURCE_DIR}/src/shell.html)
+	
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2")
+	set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS 
+		"-sTOTAL_MEMORY=67108864 -sUSE_GLFW=3 -sASYNCIFY=1 --shell-file ${SHELL_FILE} -sASSERTIONS=1 \
+		-sEXPORTED_RUNTIME_METHODS=['ccall'] -sASYNCIFY_IMPORTS=['emscripten_asm_const_int','ccall']")
 else()
 	target_link_libraries(${PROJECT_NAME} GLEW OSMesa)
 	
