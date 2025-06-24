@@ -38,7 +38,7 @@ void main()
 	gl_Position = modelViewProjection * vec4(vPosition, 1);
 
 	if (chromeEnable != 0) {
-		fTex.x = vBone; // just keeping the var active to stop error spam
+		fTex.x = vBone; // just keeping the var active to stop error spam (chrome uniform is never enabled)
 	} else {
 		fTex = vTex;
 	}
@@ -67,7 +67,7 @@ vec4 lighting(vec3 tNormal)
 		vec3 diffuse = lights[i][1].xyz;
 		float lightcos = dot(tNormal, lightDirection);
 		float r = 1.5;
-		lightcos = ( lightcos + ( r - 1.0f ) ) / r;
+		lightcos = ( lightcos + ( r - 1.0 ) ) / r;
 
 		finalColor += diffuse * lightcos;
 	}

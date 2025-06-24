@@ -1332,32 +1332,25 @@ void MdlRenderer::transformVerts(int body, bool forRender, vec3 viewerOrigin, ve
 
 					if ((buffer.flags & STUDIO_NF_CHROME) && buffer.skinref < texheader->numtextures) {
 						Texture* tex = glTextures[buffer.skinref];
-						const float s = 1.0 / (float)tex->width;
-						const float t = 1.0 / (float)tex->height;
 
 						for (int v = 0; v < buffer.numVerts; v++) {
-							vec3 tNormal = buffer.verts[v].normal;
+							vec3 tNormal = buffer.verts[v].normal.flip();
 							int boneIdx = (int)buffer.verts[v].bone;
 							float (&bone)[4][4] = m_bonetransform[boneIdx];
 
-							vec3 dir = (viewerOrigin + vec3(bone[0][3], bone[2][3], -bone[1][3])).normalize();
+							vec3 bonePos = vec3(bone[0][3], bone[1][3], bone[2][3]);
+							vec3 dir = (viewerOrigin - bonePos).normalize();
 
-							vec3 chromeupvec = crossProduct(dir, viewerRight).normalize();
-							vec3 chromerightvec = crossProduct(dir, chromeupvec).normalize();
-
-							vec3 chromeup, chromeright;
-							VectorIRotate(chromeupvec, bone, chromeup);
-							VectorIRotate(chromerightvec, bone, chromeright);
-
-							vec2 chrome;
+							vec3 chromeup = crossProduct(dir, viewerRight).normalize();
+							vec3 chromeright = crossProduct(dir, chromeup).normalize();
 
 							// calc s coord
-							float n = dotProduct(tNormal, chromeright);
-							buffer.verts[v].uv.x = ((n + 1.0) * 32.0) * s;
+							float n = dotProduct(tNormal, chromeright.flip());
+							buffer.verts[v].uv.x = (n + 1.0f) * 0.5f;
 
 							// calc t coord
-							n = dotProduct(tNormal, chromeup);
-							buffer.verts[v].uv.y = ((n + 1.0) * 32.0) * t;
+							n = dotProduct(tNormal, chromeup.flip());
+							buffer.verts[v].uv.y = (n + 1.0f) * 0.5f;
 						}
 					}
 
@@ -1447,8 +1440,8 @@ void MdlRenderer::draw(vec3 origin, vec3 angles, EntRenderOpts& opts, vec3 viewe
 	shader->setUniform("ambient", opts.rendercolor.toVec()); // ambient lighting
 	
 	if (!legacyMode) {
-		shader->setUniform("viewerOrigin", viewerOrigin - origin); // world coordinates
-		shader->setUniform("viewerRight", viewerRight);
+		shader->setUniform("viewerOrigin", (viewerOrigin - origin)); // world coordinates
+		shader->setUniform("viewerRight", viewerRight*-1);
 	}
 
 	// light data
@@ -1483,8 +1476,9 @@ void MdlRenderer::draw(vec3 origin, vec3 angles, EntRenderOpts& opts, vec3 viewe
 		// no way to upload bone data. Do transforms on the CPU (slow!!)
 		// TODO: chrome is wrong, check goldenman.mdl
 		SetUpBones(angles, opts.sequence, drawFrame);
-		vec3 viewOrigin = origin * -1;
-		transformVerts(opts.body, true, viewOrigin, vec3(0,0,1));
+
+		vec3 viewOrigin = (viewerOrigin - origin).flip();
+		transformVerts(opts.body, true, viewOrigin, viewerRight*-1);
 		needTransform = true;
 	}
 	glActiveTexture(GL_TEXTURE0);

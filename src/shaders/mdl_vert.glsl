@@ -66,7 +66,7 @@ void main()
 	if (additiveEnable != 0) {
 		fColor = vec4(1, 1, 1, 1);
 	} else if (flatshadeEnable == 1) {
-		fColor = vec4(ambient*0.725f, 1);
+		fColor = vec4(ambient*0.725, 1);
 	} else if (flatshadeEnable == 2) {
 		fColor = vec4(1, 1, 1, 1);
 	} else {
@@ -93,8 +93,8 @@ vec3 irotateVector(vec3 v, mat4 mat)
 }
 
 vec2 chrome(vec3 tNormal, inout mat4 bone)
-{
-	vec3 dir = normalize(viewerOrigin + vec3(bone[0][3], bone[2][3], -bone[1][3]));
+{	
+	vec3 dir = normalize(viewerOrigin - vec3(bone[0][3], bone[2][3], -bone[1][3]));
 
 	vec3 chromeupvec = normalize(cross(dir, viewerRight));
 	vec3 chromerightvec = normalize(cross(dir, chromeupvec));
@@ -127,7 +127,7 @@ vec4 lighting(inout vec3 tNormal)
 		vec3 diffuse = lights[i][1].xyz;
 		float lightcos = dot(tNormal, lightDirection);
 		float r = 1.5;
-		lightcos = ( lightcos + ( r - 1.0f ) ) / r;
+		lightcos = ( lightcos + ( r - 1.0 ) ) / r;
 
 		finalColor += diffuse * lightcos;
 	}
