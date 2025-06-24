@@ -104,3 +104,14 @@ double TimeDifference(uint64_t start, uint64_t end) {
 		return -((start - end) / 1000.0);
 	}
 }
+
+char* strcpy_safe(char* dest, const char* src, size_t size) {
+	if (size > 0) {
+		size_t i;
+		for (i = 0; i < size - 1 && src[i]; i++) {
+			dest[i] = src[i];
+		}
+		dest[i] = '\0';
+	}
+	return dest;
+}

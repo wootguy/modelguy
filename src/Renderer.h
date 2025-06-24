@@ -7,18 +7,32 @@ class GLFWwindow;
 
 class Renderer {
 public:
+	MdlRenderer* mdlRenderer = NULL;
+	EntRenderOpts renderOpts;
+
 	Renderer(std::string fpath, int width, int height, bool legacy_renderer, bool headless);
 
-	void load_model(std::string modl);
+	bool load_model(std::string modl);
+
+	void unload_model();
+
+	void change_animation(int idx);
+
+	void reset_view();
+
+	void resize_view(int width, int height);
 
 	void render_loop();
 
 	void create_image(string outPath);
 
+	void setup_render();
+
+	void render();
+
 private:
 	string fpath;
 	Model* m_model;
-	MdlRenderer* mdlRenderer = NULL;
 	bool legacy_renderer;
 	bool headless;
 	bool valid;
@@ -45,10 +59,6 @@ private:
 	vec3 modelAngles = vec3(0, -90, 0);
 	vec3 modelOrigin = vec3(0, 0, 0);
 
-	EntRenderOpts renderOpts;
-
-	void setup_render();
-	void render();
 	bool create_window(int width, int height);
 	bool create_headless_context(int width, int height);
 	void init_gl();

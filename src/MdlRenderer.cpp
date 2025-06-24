@@ -1,6 +1,10 @@
 #include "MdlRenderer.h"
 #include "util.h"
+
+#ifndef EMSCRIPTEN
 #include <GL/glew.h>
+#endif
+
 #include <GLFW/glfw3.h>
 #include <ShaderProgram.h>
 #include "mat4x4.h"
@@ -383,19 +387,21 @@ void MdlRenderer::upload() {
 
 	shader->bind();
 
-	glGenTextures(1, &u_boneTexture);
-	glBindTexture(GL_TEXTURE_2D, u_boneTexture);
+	if (!legacy_mode) {
+		glGenTextures(1, &u_boneTexture);
+		glBindTexture(GL_TEXTURE_2D, u_boneTexture);
 
-	// disable filtering and mipmaps so the texture can be used as a lookup table
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+		// disable filtering and mipmaps so the texture can be used as a lookup table
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
 
-	// allocate data so subImage can be used for faster updates
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 4, MAXSTUDIOBONES, 0, GL_RGBA, GL_FLOAT, m_bonetransform);
-
-	glCheckError("MDL bone texture creation");
+		// allocate data so subImage can be used for faster updates
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 4, MAXSTUDIOBONES, 0, GL_RGBA, GL_FLOAT, m_bonetransform);
+		
+		glCheckError("MDL bone texture creation");
+	}
 }
 
 #include <lodepng.h>
