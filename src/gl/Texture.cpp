@@ -1,6 +1,10 @@
 #include <GL/glew.h>
 #include "Texture.h"
 
+bool isPowerOf2(int n) {
+	return n && (n & (n - 1)) == 0;
+}
+
 Texture::Texture(int width, int height) {
 	this->width = width;
 	this->height = height;
@@ -50,14 +54,17 @@ void Texture::upload(int format)
 
 	glBindTexture(GL_TEXTURE_2D, id); // Binds this texture handle so we can load the data into it
 
+	int wrapMode = GL_REPEAT;
+
 #ifdef EMSCRIPTEN
-	// required for NPOT textures
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-#else
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); // Note: GL_CLAMP is significantly slower
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	if (!isPowerOf2(width) || !isPowerOf2(height)) {
+		// WebGL 1.0 requirement
+		wrapMode = GL_CLAMP_TO_EDGE;
+	}
 #endif
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapMode); // Note: GL_CLAMP is significantly slower
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapMode);
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
