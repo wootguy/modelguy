@@ -131,7 +131,7 @@ extern "C" {
 	}
 
 	EMSCRIPTEN_KEEPALIVE void set_wireframe(int wireframe) {
-		renderer->renderOpts.wireframe = !renderer->renderOpts.wireframe;
+		renderer->renderOpts.wireframe = wireframe != 0;
 	}
 
 	EMSCRIPTEN_KEEPALIVE void reset_zoom() {
