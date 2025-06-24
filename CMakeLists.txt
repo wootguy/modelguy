@@ -41,6 +41,10 @@ set(SHADER_FILES
 	src/shaders/mdl_vert.glsl
 	src/shaders/mdl_frag.glsl
 	src/shaders/mdl_legacy_vert.glsl
+	
+	src/shaders/mdl_wire_vert.glsl
+	src/shaders/mdl_wire_legacy_vert.glsl
+	src/shaders/mdl_wire_frag.glsl
 )
 
 # Custom command that always runs because cmake doesn't care if .glsl contents change.

@@ -40,6 +40,7 @@ private:
 
 	GLFWwindow* window;
 	ShaderProgram* mdlShader = NULL;
+	ShaderProgram* mdlWireShader = NULL;
 	ShaderProgram* colorShader = NULL;
 	int windowWidth;
 	int windowHeight;

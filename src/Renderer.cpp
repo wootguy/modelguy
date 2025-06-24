@@ -71,7 +71,7 @@ Renderer::Renderer(string fpath, int width, int height, bool legacy_renderer, bo
 }
 
 bool Renderer::load_model(std::string fpath) {
-	MdlRenderer* newRenderer = new MdlRenderer(mdlShader, legacy_renderer, fpath);
+	MdlRenderer* newRenderer = new MdlRenderer(mdlShader, mdlWireShader, legacy_renderer, fpath);
 
 	if (!newRenderer->valid) {
 		printf("Failed to load model: %s\n", fpath.c_str());
@@ -254,6 +254,7 @@ bool Renderer::create_headless_context(int width, int height) {
 void Renderer::compile_shaders() {
 
 	const char* mdl_vert = legacy_renderer ? mdl_legacy_vert_glsl : mdl_vert_glsl;
+	const char* mdl_wire_vert = legacy_renderer ? mdl_wire_legacy_vert_glsl : mdl_wire_vert_glsl;
 
 	colorShader = new ShaderProgram("Color");
 	colorShader->compile(cvert_vert_glsl, cvert_frag_glsl);
@@ -279,6 +280,16 @@ void Renderer::compile_shaders() {
 		mdlShader->addUniform("viewerRight", UNIFORM_VEC3);
 		mdlShader->addUniform("textureST", UNIFORM_VEC2);
 		mdlShader->addUniform("boneMatrixTexture", UNIFORM_INT);
+	}
+
+	mdlWireShader = new ShaderProgram("MDL_wire");
+	mdlWireShader->compile(mdl_wire_vert, mdl_wire_frag_glsl);
+	mdlWireShader->setMatrixes(&model, &view, &projection, &modelView, &modelViewProjection);
+	mdlWireShader->setMatrixNames(NULL, "modelViewProjection");
+	mdlWireShader->addUniform("wireColor", UNIFORM_VEC4);
+	mdlWireShader->setVertexAttributeNames("vPosition", NULL, NULL, NULL);
+	if (!legacy_renderer) {
+		mdlWireShader->addUniform("boneMatrixTexture", UNIFORM_INT);
 	}
 }
 

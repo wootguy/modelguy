@@ -14,10 +14,11 @@
 
 void glCheckError(const char* checkMessage);
 
-MdlRenderer::MdlRenderer(ShaderProgram* shader, bool legacy_mode, string modelPath) {
+MdlRenderer::MdlRenderer(ShaderProgram* shader, ShaderProgram* wireShader, bool legacy_mode, string modelPath) {
 	this->fpath = modelPath;
 	this->legacy_mode = legacy_mode;
 	this->shader = shader;
+	this->wireShader = wireShader;
 	valid = false;
 	needTransform = true;
 	u_boneTexture = -1;
@@ -49,7 +50,9 @@ MdlRenderer::~MdlRenderer() {
 					delete[] render.origNorms;
 					delete[] render.transformVerts;
 					delete[] render.verts;
+					delete[] render.wireVerts;
 					delete render.buffer;
+					delete render.wireBuffer;
 				}
 
 				delete[] meshBuffers[b][m];
@@ -378,6 +381,7 @@ void MdlRenderer::upload() {
 			for (int k = 0; k < mod->nummesh; k++) {
 				if (!meshBuffers[b][m][k].buffer->isUploaded()) {
 					meshBuffers[b][m][k].buffer->upload();
+					meshBuffers[b][m][k].wireBuffer->upload();
 				}
 			}
 		}
@@ -707,15 +711,29 @@ bool MdlRenderer::loadMeshes() {
 					allVerts.push_back(bvert);
 				}
 
-				meshBuffers[b][m][k].flags = texture->flags;
-				meshBuffers[b][m][k].verts = new boneVert[totalElements];
-				meshBuffers[b][m][k].numVerts = totalElements;
-				memcpy(meshBuffers[b][m][k].verts, &allVerts[0], totalElements * sizeof(boneVert));
-				meshBuffers[b][m][k].buffer = new VertexBuffer(shader, NORM_3F | TEX_2F | POS_3F, meshBuffers[b][m][k].verts, meshBuffers[b][m][k].numVerts);
-				meshBuffers[b][m][k].buffer->addAttribute(1, GL_FLOAT, GL_FALSE, "vBone");
+				MdlMeshRender& meshbuf = meshBuffers[b][m][k];
+				meshbuf.flags = texture->flags;
+				meshbuf.verts = new boneVert[totalElements];
+				meshbuf.numVerts = totalElements;
+				memcpy(meshbuf.verts, &allVerts[0], totalElements * sizeof(boneVert));
+				meshbuf.buffer = new VertexBuffer(shader, NORM_3F | TEX_2F | POS_3F, meshbuf.verts, meshbuf.numVerts);
+				meshbuf.buffer->addAttribute(1, GL_FLOAT, GL_FALSE, "vBone");
 				//meshBuffers[b][m][k].buffer->upload();
 
-				meshBytes += totalElements * (sizeof(uint16_t) + sizeof(uint16_t) + sizeof(boneVert));
+				meshbuf.wireVerts = new wireBoneVert[totalElements*2];
+				int idx = 0;
+				for (int i = 0; i < totalElements; i += 3) {
+					meshbuf.wireVerts[idx++] = wireBoneVert(meshbuf.verts[i + 0]);
+					meshbuf.wireVerts[idx++] = wireBoneVert(meshbuf.verts[i + 1]);
+					meshbuf.wireVerts[idx++] = wireBoneVert(meshbuf.verts[i + 1]);
+					meshbuf.wireVerts[idx++] = wireBoneVert(meshbuf.verts[i + 2]);
+					meshbuf.wireVerts[idx++] = wireBoneVert(meshbuf.verts[i + 2]);
+					meshbuf.wireVerts[idx++] = wireBoneVert(meshbuf.verts[i + 0]);
+				}
+				meshbuf.wireBuffer = new VertexBuffer(wireShader, POS_3F, meshbuf.wireVerts, meshbuf.numVerts*2);
+				meshbuf.wireBuffer->addAttribute(1, GL_FLOAT, GL_FALSE, "vBone");
+
+				meshBytes += totalElements * (sizeof(uint16_t) + sizeof(uint16_t) + sizeof(boneVert) + sizeof(wireBoneVert)*2);
 			}
 		}
 	}
@@ -1278,7 +1296,7 @@ void MdlRenderer::untransformVerts() {
 	}
 }
 
-void MdlRenderer::transformVerts(int body, bool forRender, vec3 viewerOrigin, vec3 viewerRight) {
+void MdlRenderer::transformVerts(int body, bool forRender, vec3 viewerOrigin, vec3 viewerRight, bool wireframe) {
 	int modelIdx = 0;
 
 	int bodyValue = clamp(body, 0, 255);
@@ -1328,6 +1346,19 @@ void MdlRenderer::transformVerts(int body, bool forRender, vec3 viewerOrigin, ve
 						short oldNormIdx = buffer.origNorms[v];
 						buffer.verts[v].pos = transformedVerts[oldVertIdx];
 						buffer.verts[v].normal = transformedNormals[oldNormIdx].flip();
+					}
+
+					if (wireframe) {
+						int idx = 0;
+						for (int v = 0; v < buffer.numVerts; v+=3) {
+							buffer.wireVerts[idx++].pos = buffer.verts[v + 0].pos;
+							buffer.wireVerts[idx++].pos = buffer.verts[v + 1].pos;
+							buffer.wireVerts[idx++].pos = buffer.verts[v + 1].pos;
+							buffer.wireVerts[idx++].pos = buffer.verts[v + 2].pos;
+							buffer.wireVerts[idx++].pos = buffer.verts[v + 2].pos;
+							buffer.wireVerts[idx++].pos = buffer.verts[v + 0].pos;
+						}
+						buffer.wireBuffer->upload();
 					}
 
 					if ((buffer.flags & STUDIO_NF_CHROME) && buffer.skinref < texheader->numtextures) {
@@ -1478,7 +1509,7 @@ void MdlRenderer::draw(vec3 origin, vec3 angles, EntRenderOpts& opts, vec3 viewe
 		SetUpBones(angles, opts.sequence, drawFrame);
 
 		vec3 viewOrigin = (viewerOrigin - origin).flip();
-		transformVerts(opts.body, true, viewOrigin, viewerRight*-1);
+		transformVerts(opts.body, true, viewOrigin, viewerRight*-1, opts.wireframe);
 		needTransform = true;
 	}
 	glActiveTexture(GL_TEXTURE0);
@@ -1517,8 +1548,6 @@ void MdlRenderer::draw(vec3 origin, vec3 angles, EntRenderOpts& opts, vec3 viewe
 			Texture* tex = glTextures[remappedSkin];
 			tex->bind();
 
-			glCheckError("binding MDL texture");
-
 			if (!render.buffer) {
 				continue;
 			}
@@ -1554,17 +1583,52 @@ void MdlRenderer::draw(vec3 origin, vec3 angles, EntRenderOpts& opts, vec3 viewe
 				}
 			}
 
-			glCheckError("setting MDL body uniforms");
-
 			render.buffer->draw(GL_TRIANGLES);
-
-			glCheckError("rendering MDL body part");
 		}
+	}
+
+	shader->popMatrix(MAT_MODEL);
+
+	if (opts.wireframe) {
+		wireShader->bind();
+		wireShader->setUniform("wireColor", vec4(1, 0, 0, 1));
+
+		if (!legacyMode)
+			wireShader->setUniform("boneMatrixTexture", 1);
+
+		wireShader->pushMatrix(MAT_MODEL);
+		wireShader->modelMat->loadIdentity();
+		wireShader->modelMat->translate(origin.x, origin.z, -origin.y);
+		wireShader->updateMatrixes();
+	
+		for (int b = 0; b < header->numbodyparts; b++) {
+			// Try loading required model info
+			data.seek(header->bodypartindex + b * sizeof(mstudiobodyparts_t));
+			mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
+
+			int activeModel = (bodyValue / bod->base) % bod->nummodels;
+			bodyValue -= activeModel * bod->base;
+
+			data.seek(bod->modelindex + activeModel * sizeof(mstudiomodel_t));
+			mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
+
+			for (int k = 0; k < mod->nummesh; k++) {
+				MdlMeshRender& render = meshBuffers[b][activeModel][k];
+
+				if (!render.buffer) {
+					continue;
+				}
+
+				render.wireBuffer->draw(GL_LINES);
+			}
+		}
+
+		wireShader->popMatrix(MAT_MODEL);
 	}
 
 	//printf("Draw %d meshes\n", meshCount);
 
-	shader->popMatrix(MAT_MODEL);
+	glCheckError("rendering model");
 }
 
 // get a AABB containing all model vertices at the given angles and animation frame

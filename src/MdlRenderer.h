@@ -22,8 +22,20 @@ struct boneVert {
 	float bone;
 };
 
+struct wireBoneVert {
+	vec3 pos;
+	float bone;
+
+	wireBoneVert() {}
+	wireBoneVert(boneVert& vert) {
+		this->pos = vert.pos;
+		this->bone = vert.bone;
+	}
+};
+
 struct MdlMeshRender {
-	boneVert* verts;
+	boneVert* verts; // rendered vertices
+	wireBoneVert* wireVerts; // wireframe rendering
 	short* origVerts; // original mdl vertex used to create the rendered vertex
 	vec3* transformVerts; // duplicate of verts positions that can be edited before/after buffers upload
 	short* origNorms; // original mdl normals used to create the rendered normal
@@ -31,6 +43,7 @@ struct MdlMeshRender {
 	int flags;
 	int skinref; // index into glTextures or remappable skin
 	VertexBuffer* buffer;
+	VertexBuffer* wireBuffer;
 };
 
 struct EntRenderOpts {
@@ -72,7 +85,7 @@ public:
 	float drawFrame = 0;
 	uint64_t lastDrawCall = 0;
 
-	MdlRenderer(ShaderProgram* shader, bool legacy_mode, string modelPath);
+	MdlRenderer(ShaderProgram* shader, ShaderProgram* wireShader, bool legacy_mode, string modelPath);
 	~MdlRenderer();
 
 	void draw(vec3 origin, vec3 angles, EntRenderOpts& opts, vec3 viewerOrigin, vec3 viewerRight);
@@ -91,6 +104,7 @@ private:
 	bool legacy_mode;
 
 	ShaderProgram* shader;
+	ShaderProgram* wireShader;
 	Texture** glTextures = NULL;
 	MdlMeshRender*** meshBuffers = NULL;
 	int numTextures;
@@ -134,7 +148,7 @@ private:
 	bool validate();
 	bool hasExternalTextures();
 	bool hasExternalSequences();
-	void transformVerts(int body, bool forRender, vec3 viewerOrigin=vec3(), vec3 viewerRight=vec3(1,0,0));
+	void transformVerts(int body, bool forRender, vec3 viewerOrigin=vec3(), vec3 viewerRight=vec3(1,0,0), bool wireframe=false);
 	void untransformVerts();
 
 	// frame values = 0 - 1.0 (0-100%)
