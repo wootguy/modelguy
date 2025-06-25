@@ -1526,64 +1526,68 @@ void MdlRenderer::draw(vec3 origin, vec3 angles, EntRenderOpts& opts, vec3 viewe
 
 	int bodyValue = clamp(opts.body, 0, 255);
 
-	for (int b = 0; b < header->numbodyparts; b++) {
-		// Try loading required model info
-		data.seek(header->bodypartindex + b * sizeof(mstudiobodyparts_t));
-		mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
+	for (int pass = 0; pass < 2; pass++) {
+		// render additive meshes last
+		bool isAdditivePass = pass == 1;
+		glBlendFunc(GL_SRC_ALPHA, isAdditivePass ? GL_ONE : defaultBlendFunc);
+		shader->setUniform("additiveEnable", isAdditivePass);
 
-		int activeModel = (bodyValue / bod->base) % bod->nummodels;
-		bodyValue -= activeModel * bod->base;
+		for (int b = 0; b < header->numbodyparts; b++) {
+			// Try loading required model info
+			data.seek(header->bodypartindex + b * sizeof(mstudiobodyparts_t));
+			mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
 
-		data.seek(bod->modelindex + activeModel * sizeof(mstudiomodel_t));
-		mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
+			int activeModel = (bodyValue / bod->base) % bod->nummodels;
+			bodyValue -= activeModel * bod->base;
 
-		for (int k = 0; k < mod->nummesh; k++) {
-			MdlMeshRender& render = meshBuffers[b][activeModel][k];
-			
-			short remappedSkin = pskinref[skin*header->numskinref + render.skinref];
-			if (remappedSkin < 0 || remappedSkin >= header->numtextures) {
-				remappedSkin = render.skinref;
-			}
+			data.seek(bod->modelindex + activeModel * sizeof(mstudiomodel_t));
+			mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
 
-			Texture* tex = glTextures[remappedSkin];
-			tex->bind();
+			for (int k = 0; k < mod->nummesh; k++) {
+				MdlMeshRender& render = meshBuffers[b][activeModel][k];
 
-			if (!render.buffer) {
-				continue;
-			}
-
-			if (render.flags & STUDIO_NF_ADDITIVE) {
-				shader->setUniform("additiveEnable", 1);
-				glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-			}
-			else {
-				shader->setUniform("additiveEnable", 0);
-				glBlendFunc(GL_SRC_ALPHA, defaultBlendFunc);
-			}
-
-			int flatShade = 0;
-			if (render.flags & STUDIO_NF_FULLBRIGHT) {
-				flatShade = 2;
-			} else if (render.flags & STUDIO_NF_FLATSHADE) {
-				flatShade = 1;
-			}
-
-			shader->setUniform("flatshadeEnable", flatShade);
-
-			if (!legacyMode) {
-				if (render.flags & STUDIO_NF_CHROME) {
-					const float s = 1.0 / (float)tex->width;
-					const float t = 1.0 / (float)tex->height;
-
-					shader->setUniform("chromeEnable", 1);
-					shader->setUniform("textureST", vec2(s, t));
+				if (!render.buffer) {
+					continue;
 				}
-				else {
-					shader->setUniform("chromeEnable", 0);
-				}
-			}
 
-			render.buffer->draw(GL_TRIANGLES);
+				bool isAdditive = render.flags & STUDIO_NF_ADDITIVE;
+				if (isAdditive != isAdditivePass) {
+					continue;
+				}
+
+				short remappedSkin = pskinref[skin * header->numskinref + render.skinref];
+				if (remappedSkin < 0 || remappedSkin >= header->numtextures) {
+					remappedSkin = render.skinref;
+				}
+
+				Texture* tex = glTextures[remappedSkin];
+				tex->bind();
+
+				int flatShade = 0;
+				if (render.flags & STUDIO_NF_FULLBRIGHT) {
+					flatShade = 2;
+				}
+				else if (render.flags & STUDIO_NF_FLATSHADE) {
+					flatShade = 1;
+				}
+
+				shader->setUniform("flatshadeEnable", flatShade);
+
+				if (!legacyMode) {
+					if (render.flags & STUDIO_NF_CHROME) {
+						const float s = 1.0 / (float)tex->width;
+						const float t = 1.0 / (float)tex->height;
+
+						shader->setUniform("chromeEnable", 1);
+						shader->setUniform("textureST", vec2(s, t));
+					}
+					else {
+						shader->setUniform("chromeEnable", 0);
+					}
+				}
+
+				render.buffer->draw(GL_TRIANGLES);
+			}
 		}
 	}
 
