@@ -280,7 +280,6 @@ void Renderer::compile_shaders() {
 	if (!legacy_renderer) {
 		mdlShader->addUniform("viewerOrigin", UNIFORM_VEC3);
 		mdlShader->addUniform("viewerRight", UNIFORM_VEC3);
-		mdlShader->addUniform("textureST", UNIFORM_VEC2);
 		mdlShader->addUniform("boneMatrixTexture", UNIFORM_INT);
 	}
 

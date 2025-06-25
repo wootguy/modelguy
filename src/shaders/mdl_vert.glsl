@@ -24,7 +24,6 @@ uniform int flatshadeEnable;
 // chrome uniforms
 uniform vec3 viewerOrigin;
 uniform vec3 viewerRight;
-uniform vec2 textureST;
 
 // vertex variables
 attribute vec3 vPosition;
@@ -38,7 +37,6 @@ varying vec4 fColor;
 
 vec4 lighting(inout vec3 tNormal);
 vec3 rotateVector(vec3 v, inout mat4 mat);
-vec3 irotateVector(vec3 v, mat4 mat);
 vec2 chrome(vec3 tNormal, inout mat4 bone);
 
 void main()
@@ -57,7 +55,7 @@ void main()
 	gl_Position = modelViewProjection * vec4(pos, 1);
 
 	if (chromeEnable != 0) {
-		fTex = chrome(vNormal, bone);
+		fTex = chrome(tNormal, bone);
 	} else {
 		fTex = vTex;
 	}
@@ -83,34 +81,17 @@ vec3 rotateVector(vec3 v, inout mat4 mat)
 	return vout; 
 }
 
-vec3 irotateVector(vec3 v, mat4 mat)
-{
-	vec3 vout; 
-	vout.x = v.x * mat[0][0] + v.y * mat[1][0] + v.z * mat[2][0];
-	vout.y = v.x * mat[0][1] + v.y * mat[1][1] + v.z * mat[2][1];
-	vout.z = v.x * mat[0][2] + v.y * mat[1][2] + v.z * mat[2][2];
-	return vout; 
-}
-
 vec2 chrome(vec3 tNormal, inout mat4 bone)
-{	
-	vec3 dir = normalize(viewerOrigin - vec3(bone[0][3], bone[2][3], -bone[1][3]));
+{
+	vec3 bonePos = vec3(bone[0][3], bone[1][3], bone[2][3]);
+	vec3 dir = normalize(viewerOrigin - bonePos);
 
-	vec3 chromeupvec = normalize(cross(dir, viewerRight));
-	vec3 chromerightvec = normalize(cross(dir, chromeupvec));
-
-	vec3 chromeup = irotateVector(chromeupvec, bone);
-	vec3 chromeright = irotateVector(chromerightvec, bone);
-
+	vec3 chromeup = normalize(cross(dir, viewerRight));
+	vec3 chromeright = normalize(cross(dir, chromeup));
+	
 	vec2 chrome;
-
-// calc s coord
-	float n = dot(tNormal, chromeright);
-	chrome.x = ((n + 1.0) * 32.0) * textureST.x;
-
-// calc t coord
-	n = dot(tNormal, chromeup);
-	chrome.y = ((n + 1.0) * 32.0) * textureST.y;
+	chrome.x = (dot(tNormal, chromeright) + 1.0) * 0.5;
+	chrome.y = (dot(tNormal, chromeup) + 1.0) * 0.5;
 
 	return chrome;
 }

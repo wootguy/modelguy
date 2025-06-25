@@ -95,7 +95,7 @@ int get_model_type(string inputFile) {
 }
 
 int view_model(string inputFile) {
-	bool legacy = true;
+	bool legacy = false;
 	bool headless = false;
 	Renderer renderer = Renderer(inputFile, 500, 800, legacy, headless);
 	renderer.render_loop();
