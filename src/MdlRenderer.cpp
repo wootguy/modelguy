@@ -646,12 +646,7 @@ bool MdlRenderer::loadMeshes() {
 
 						MdlVert vert;
 
-						if (texture->flags & STUDIO_NF_ADDITIVE) {
-							vert.color = vec4(1.0f, 1.0f, 1.0f, 1.0f);
-						}
-						else {
-							vert.color = vec4(pstudionorms[ptricmds[1]], 0);
-						}
+						vert.color = vec4(pstudionorms[ptricmds[1]], 0);
 
 						if (texture->flags & STUDIO_NF_CHROME) {
 							// real UVs calculated in shader
@@ -1469,11 +1464,6 @@ void MdlRenderer::draw(vec3 origin, vec3 angles, EntRenderOpts& opts, vec3 viewe
 	shader->setUniform("sTex", 0);
 	shader->setUniform("elights", 1); // number of active lights
 	shader->setUniform("ambient", opts.rendercolor.toVec()); // ambient lighting
-	
-	if (!legacyMode) {
-		shader->setUniform("viewerOrigin", (viewerOrigin - origin)); // world coordinates
-		shader->setUniform("viewerRight", viewerRight*-1);
-	}
 
 	// light data
 	vec3 lights[4][3];
@@ -1493,6 +1483,9 @@ void MdlRenderer::draw(vec3 origin, vec3 angles, EntRenderOpts& opts, vec3 viewe
 	
 	if (!legacyMode) {
 		SetUpBones(angles, opts.sequence, drawFrame);
+
+		shader->setUniform("viewerOrigin", (viewerOrigin - origin).flip()); // world coordinates
+		shader->setUniform("viewerRight", viewerRight * -1);
 
 		// Hack: upload bone matrices as texture pixels.
 		// Opengl 3.0 doesn't have uniform buffers and mat4[128] is far too many uniforms for a valid shader.
@@ -1574,16 +1567,7 @@ void MdlRenderer::draw(vec3 origin, vec3 angles, EntRenderOpts& opts, vec3 viewe
 				shader->setUniform("flatshadeEnable", flatShade);
 
 				if (!legacyMode) {
-					if (render.flags & STUDIO_NF_CHROME) {
-						const float s = 1.0 / (float)tex->width;
-						const float t = 1.0 / (float)tex->height;
-
-						shader->setUniform("chromeEnable", 1);
-						shader->setUniform("textureST", vec2(s, t));
-					}
-					else {
-						shader->setUniform("chromeEnable", 0);
-					}
+					shader->setUniform("chromeEnable", (render.flags & STUDIO_NF_CHROME) ? 1 : 0);
 				}
 
 				render.buffer->draw(GL_TRIANGLES);
