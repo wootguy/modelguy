@@ -57,10 +57,10 @@ void Texture::upload(int format)
 	int wrapMode = GL_REPEAT;
 
 #ifdef EMSCRIPTEN
-	if (!isPowerOf2(width) || !isPowerOf2(height)) {
+	//if (!isPowerOf2(width) || !isPowerOf2(height)) {
 		// WebGL 1.0 requirement
-		wrapMode = GL_CLAMP_TO_EDGE;
-	}
+	//	wrapMode = GL_CLAMP_TO_EDGE;
+	//}
 #endif
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapMode); // Note: GL_CLAMP is significantly slower

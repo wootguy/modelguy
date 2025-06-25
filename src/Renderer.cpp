@@ -387,7 +387,17 @@ void Renderer::render() {
 	if (headless)
 		projection(5) *= -1;
 
-	modelAngles.y = normalizeRangef(modelAngles.y + 0.5f, 0, 360);
+	static uint64_t lastFrame = 0;
+
+	uint64_t now = getEpochMillis();
+	float dt = TimeDifference(lastFrame, now);
+	lastFrame = now;
+
+	if (dt > 0.5f) {
+		dt = 0;
+	}
+
+	modelAngles.y = normalizeRangef(modelAngles.y + dt*50, 0, 360);
 	//modelAngles.x = normalizeRangef(modelAngles.x + 0.5f, 0, 360);
 	/*
 	if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {

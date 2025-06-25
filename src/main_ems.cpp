@@ -152,7 +152,7 @@ extern "C" {
 
 int main(int argc, char* argv[])
 {
-	bool legacy = true;
+	bool legacy = false;
 	renderer = new Renderer("", width, height, legacy, false);
 	renderer->setup_render();
 
