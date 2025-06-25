@@ -127,6 +127,7 @@ elseif(EMSCRIPTEN)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2")
 	set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS 
 		"-sTOTAL_MEMORY=67108864 -sUSE_GLFW=3 -sASYNCIFY=1 --shell-file ${SHELL_FILE} -sASSERTIONS=1 \
+		-sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 \
 		-sEXPORTED_RUNTIME_METHODS=['ccall'] -sASYNCIFY_IMPORTS=['emscripten_asm_const_int','ccall']")
 else()
 	target_link_libraries(${PROJECT_NAME} GLEW OSMesa)
