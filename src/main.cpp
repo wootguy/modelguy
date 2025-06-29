@@ -78,7 +78,13 @@ void dump_info(string inputFile, string outputFile) {
 void wavify(string inputFile, string outputFile) {
 	Model model(inputFile);
 	model.validate();
-	model.wavify();
+
+	int eventsEdited = model.wavify();
+
+	if (eventsEdited) {
+		printf("Applied wav extension to %d audio events\n", eventsEdited);
+	}
+
 	model.write(outputFile);
 }
 
@@ -197,9 +203,9 @@ int main(int argc, char* argv[])
 			"  crop   : Crops a texture to the specified dimensions. Takes <width>x<height> as parameters.\n"
 			"  resize : Resizes a texture to the specified dimensions. Takes <width>x<height> as parameters.\n"
 			"  rename : Renames a texture. Takes <old name> <new name> as parameters.\n"
-			"  info   : Write model info to a JSON file. Takes <input.mdl> <output.json> as parameters\n"
-			"  wavify : Apply .wav extension to all events. Takes <input.mdl> <output.json> as parameters\n\n"
-			"  porthl : Port a Sven Co-op player model to Half-Life\n"
+			"  info   : Write model info to a JSON file. Takes <input.mdl> <output.json> as parameters.\n"
+			"  wavify : Apply .wav extension to all events. Takes <input.mdl> <output.json> as parameters\.n\n"
+			"  porthl : Port a Sven Co-op player model to Half-Life. Takes <input.mdl> and <outpu.mdl> as parameters.\n"
 			"  type   : Identify player model type. The return code is unique per mod.\n"
 			"  view   : View the model in 3D.\n"
 			"  image  : Saves a PNG image of the model. Takes <width>x<height> and <output.png> as parameters.\n\n"

@@ -8,6 +8,7 @@
 #include <cstring>
 #include "base_resample.h"
 #include <algorithm>
+#include "colors.h"
 
 #ifdef _MSC_VER 
 #define strncasecmp _strnicmp
@@ -404,6 +405,232 @@ void Model::updateIndexes(int afterIdx, int delta) {
 	header->length = data.size();
 }
 
+#define PRINT_TYPE_SIZE(name) printf("%-23s = %3d bytes\n", #name, sizeof(name))
+
+void Model::printModelDataOrder() {
+	struct DataChunk {
+		int elementType; // allow shared indexes of the same type for deduplication
+		string name;
+		int offset;
+		int size;
+		int numShares; // how many times this chunk is shared
+	};
+
+	enum ELEMENT_TYPES {
+		ET_NONE, // not an element or can't have shared pointers
+		ET_EVT,
+		ET_ANIM,
+	};
+
+	vector<DataChunk> chunks;
+
+	// skeleton
+	chunks.push_back({ ET_NONE, "header", 0, sizeof(studiohdr_t)});
+	chunks.push_back({ ET_NONE, "bones", header->boneindex, header->numbones * (int)sizeof(mstudiobone_t)});
+	chunks.push_back({ ET_NONE, "bone controllers", header->bonecontrollerindex, header->numbonecontrollers * (int)sizeof(mstudiobonecontroller_t) });
+	chunks.push_back({ ET_NONE, "attachments", header->attachmentindex, header->numattachments * (int)sizeof(mstudioattachment_t) });
+	chunks.push_back({ ET_NONE, "hitboxes", header->hitboxindex, header->numhitboxes * (int)sizeof(mstudiobbox_t) });
+	
+	// sequences
+	chunks.push_back({ ET_NONE, "sequence descriptions", header->seqindex, header->numseq * (int)sizeof(mstudioseqdesc_t) });
+	chunks.push_back({ ET_NONE, "sequence groups", header->seqgroupindex, header->numseqgroups * (int)sizeof(mstudioseqgroup_t) });
+	chunks.push_back({ ET_NONE, "transitions", header->transitionindex, header->numtransitions * 1 }); // ???
+
+	// sequences
+	for (int k = 0; k < header->numseq; k++) {
+		data.seek(header->seqindex + k * sizeof(mstudioseqdesc_t));
+		mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
+		string seqname = "sequence " + to_string(k) + " -> ";
+
+		chunks.push_back({ ET_EVT, seqname + "events", seq->eventindex, seq->numevents * (int)sizeof(mstudioevent_t)});
+		
+		data.seek(header->seqgroupindex);
+		mstudioseqgroup_t* pseqgroup = (mstudioseqgroup_t*)data.get();
+		data.seek(pseqgroup->data + seq->animindex);
+		mstudioanim_t* panim = (mstudioanim_t*)data.get();
+		int animDataSz = 0;
+
+		for (int b = 0; b < seq->numblends; b++) {
+			for (int i = 0; i < header->numbones; i++, panim++) {
+				animDataSz += sizeof(mstudioanim_t);
+
+				for (int j = 0; j < 6; j++) {
+					if (panim->offset[j] == 0) {
+						continue; // no data
+					}
+
+					mstudioanimvalue_t* pvaluehdr = (mstudioanimvalue_t*)((uint8_t*)panim + panim->offset[j]);
+					animDataSz += (pvaluehdr->num.valid + 1) * sizeof(mstudioanimvalue_t);
+
+					int frameCount = pvaluehdr->num.total;
+					while (frameCount < seq->numframes) {
+						pvaluehdr += pvaluehdr->num.valid + 1;
+						frameCount += pvaluehdr->num.total;
+						animDataSz += (pvaluehdr->num.valid + 1) * sizeof(mstudioanimvalue_t);
+					}
+				}
+			}
+		}
+		
+		chunks.push_back({ ET_ANIM, seqname + "frames", pseqgroup->data + seq->animindex, animDataSz });
+		chunks.push_back({ ET_NONE, seqname + "pivots", seq->pivotindex, seq->numpivots * (int)sizeof(mstudiopivot_t) });
+		chunks.push_back({ ET_NONE, seqname + "automove positions", seq->automoveposindex, 0 });
+		chunks.push_back({ ET_NONE, seqname + "automove angles", seq->automoveangleindex, 0 });
+	}
+
+	// meshes
+	chunks.push_back({ ET_NONE, "body part infos", header->bodypartindex, header->numbodyparts * (int)sizeof(mstudiobodyparts_t) });
+
+	for (int i = 0; i < header->numbodyparts; i++) {
+		data.seek(header->bodypartindex + i * sizeof(mstudiobodyparts_t));
+		mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
+		string bodname = "body " + to_string(i) + " -> ";
+
+		chunks.push_back({ ET_NONE, bodname + "model infos", bod->modelindex, bod->nummodels * (int)sizeof(mstudiomodel_t) });
+
+		for (int k = 0; k < bod->nummodels; k++) {
+			data.seek(bod->modelindex + k * sizeof(mstudiomodel_t));
+			mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
+			string modname = bodname + "model " + to_string(k) + " -> ";
+
+			chunks.push_back({ ET_NONE, modname + "mesh infos", mod->meshindex, mod->nummesh * (int)sizeof(mstudiomesh_t) });
+
+			for (int j = 0; j < mod->nummesh; j++) {
+				data.seek(mod->meshindex + j * sizeof(mstudiomesh_t));
+				mstudiomesh_t* mesh = (mstudiomesh_t*)data.get();
+				string meshname = modname + "mesh " + to_string(j) + " -> ";
+
+				// normals are stored in model array and referenced from triangle data
+				//chunks.push_back({ meshname + "normals", mesh->normindex, mesh->numnorms * (int)sizeof(vec3) });
+
+				data.seek(mesh->triindex);
+				short* ptricmds = (short*)data.get();
+				short* ptricmds_start = ptricmds;
+				int p = 0;
+
+				while (p = *(ptricmds++)) {
+					if (p < 0) p = -p;
+					for (; p > 0; p--, ptricmds += 4);
+				}
+				int triDataSz = (uint8_t*)ptricmds - (uint8_t*)ptricmds_start;
+				chunks.push_back({ ET_NONE, meshname + "triangles", mesh->triindex, triDataSz });
+			}
+
+			chunks.push_back({ ET_NONE, modname + "normals", mod->normindex, mod->numnorms * (int)sizeof(vec3) });
+			chunks.push_back({ ET_NONE, modname + "normal bone indices", mod->norminfoindex, mod->numnorms * (int)sizeof(uint8_t) });
+			chunks.push_back({ ET_NONE, modname + "vertices", mod->vertindex, mod->numverts * (int)sizeof(vec3) });
+			chunks.push_back({ ET_NONE, modname + "vertex bone indices", mod->vertinfoindex, mod->numverts * (int)sizeof(uint8_t) });
+		}
+	}
+
+	// textures
+	chunks.push_back({ ET_NONE, "texture infos", header->textureindex, header->numtextures * (int)sizeof(mstudiotexture_t) });
+
+	for (int i = 0; i < header->numtextures; i++) {
+		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
+		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
+
+		int texSize = texture->width * texture->height + 256 * 3;
+		chunks.push_back({ ET_NONE, "texture " + to_string(i), texture->index, texSize});
+	}
+
+	chunks.push_back({ ET_NONE, "skins", header->skinindex, header->numskinfamilies * header->numskinref * (int)sizeof(short) });
+	chunks.push_back({ ET_NONE, "texture data index", header->texturedataindex, 0 });
+
+	// unused
+	chunks.push_back({ ET_NONE, "sounds", header->soundindex, 0 });
+	chunks.push_back({ ET_NONE, "sound groups", header->soundgroupindex, 0 });
+
+	sort(chunks.begin(), chunks.end(), [](const DataChunk& a, const DataChunk& b) {
+		return a.offset < b.offset;
+	});
+
+	vector<DataChunk> newChunks;
+	for (int i = 0; i < chunks.size(); i++) {
+		if (!chunks[i].size)
+			continue;
+			
+		bool isShared = false;
+		for (int k = 0; k < newChunks.size(); k++) {
+			if (k == i)
+				continue;
+			if (chunks[i].offset == newChunks[k].offset && chunks[i].elementType == newChunks[k].elementType) {
+				newChunks[k].numShares++;
+				newChunks[k].size = max(newChunks[k].size, chunks[i].size);
+				isShared = true;
+				break;
+			}
+		}
+
+		if (!isShared)
+			newChunks.push_back(chunks[i]);
+	}
+	chunks = newChunks;
+
+	/*
+	printf("\nFile type sizes:\n");
+	PRINT_TYPE_SIZE(studiohdr_t);
+	PRINT_TYPE_SIZE(studioseqhdr_t);
+	PRINT_TYPE_SIZE(mstudiobone_t);
+	PRINT_TYPE_SIZE(mstudiobonecontroller_t);
+	PRINT_TYPE_SIZE(mstudiobbox_t);
+	PRINT_TYPE_SIZE(mstudioseqgroup_t);
+	PRINT_TYPE_SIZE(mstudioseqdesc_t);
+	PRINT_TYPE_SIZE(mstudioevent_t);
+	PRINT_TYPE_SIZE(mstudiopivot_t);
+	PRINT_TYPE_SIZE(mstudioattachment_t);
+	PRINT_TYPE_SIZE(mstudioanim_t);
+	PRINT_TYPE_SIZE(mstudioanimvalue_t);
+	PRINT_TYPE_SIZE(mstudiobodyparts_t);
+	PRINT_TYPE_SIZE(mstudiotexture_t);
+	PRINT_TYPE_SIZE(mstudiomodel_t);
+	PRINT_TYPE_SIZE(mstudiomesh_t);
+	PRINT_TYPE_SIZE(mstudiotrivert_t);
+	*/
+
+	int totalGap = 0;
+	int totalOverlap = 0;
+	int totalAlignmentPadding = 0;
+
+	printf("\nFile layout:\n");
+	for (int i = 0; i < chunks.size(); i++) {
+		DataChunk& chunk = chunks[i];
+
+		string overlap = "";
+		if (i > 0) {
+			DataChunk& lastChunk = chunks[i-1];
+			int overlapBytes = lastChunk.offset + lastChunk.size - chunk.offset;
+			if (overlapBytes > 0 && lastChunk.size > 0 && chunk.size > 0) {
+				overlap = " (OVERLAP " + to_string(overlapBytes) + " BYTES!)";
+				totalOverlap += overlapBytes;
+			}
+			else if (overlapBytes < 0) {
+				overlapBytes = -overlapBytes;
+				if (overlapBytes < 4 && (chunk.offset - overlapBytes & 3)) {
+					// expected alignment of index pointer
+					overlap = " (+" + to_string(overlapBytes) + " byte alignment)";
+					totalAlignmentPadding += overlapBytes;
+				}
+				else {
+					totalGap += overlapBytes;
+					overlap = " (GAP OF " + to_string(overlapBytes) + " BYTES!)";
+				}
+			}
+		}
+
+		string shares = "";
+		if (chunk.numShares) {
+			shares = " (" + to_string(chunk.numShares+1) + " shares)";
+		}
+
+		printf("%7d (%6d bytes) : %s%s%s\n", chunk.offset,
+			chunk.size, chunk.name.c_str(), shares.c_str(), overlap.c_str());
+	}
+	printf("\nTotal overlap bytes   : %d\n", totalOverlap);
+	printf("Total mystery bytes   : %d\n", totalGap);
+	printf("Total alignment bytes : %d\n\n", totalAlignmentPadding);
+}
+
 bool Model::mergeExternalSequences(bool deleteSource) {
 	if (!hasExternalSequences()) {
 		cout << "No external sequences to merge\n";
@@ -537,7 +764,7 @@ bool Model::resizeTexture(string texName, int newWidth, int newHeight) {
 		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
 		string name = texture->name;
 
-		if (string(texture->name) != texName) {
+		if (name != texName) {
 			continue;
 		}
 
@@ -578,34 +805,52 @@ bool Model::resizeTexture(string texName, int newWidth, int newHeight) {
 				oldImage[idx*3 + 2] = palette[oldTexData[idx]*3 + 2];
 			}
 		}
+		
+		string lowername = toLowerCase(name);
+		if (lowername.find("remap") == 0 || lowername.find("dm_base") == 0) {
+			// remappable textures must use the same palette exactly
+			float scalex = texture->width / (float)newWidth;
+			float scaley = texture->height / (float)newHeight;
 
-		base::ResampleImage24((uint8_t*)oldImage, texture->width, texture->height,
-			(uint8_t*)newImage, newWidth, newHeight,
-			base::KernelType::KernelTypeLanczos2);
+			int maxSrcIdx = (texture->width * texture->height) - 1;
 
-		for (int y = 0; y < newHeight; y++) {
-			for (int x = 0; x < newWidth; x++) {
-				int idx = y * newWidth + x;
-				int r = newImage[idx * 3 + 0];
-				int g = newImage[idx * 3 + 1];
-				int b = newImage[idx * 3 + 2];
-
-				// use closest color in existing palette
-				int bestDiff = 99999;
-				int bestIdx = 0;
-				for (int k = 0; k < 256; k++) {
-					int pr = palette[k*3 + 0];
-					int pg = palette[k*3 + 1];
-					int pb = palette[k*3 + 2];
-
-					int diff = abs(pr - r) + abs(pg - g) + abs(pb - b);
-					if (diff < bestDiff) {
-						bestDiff = diff;
-						bestIdx = k;
-					}
+			for (int y = 0; y < newHeight; y++) {
+				for (int x = 0; x < newWidth; x++) {
+					int srcIdx = clamp((int)(y*scaley) * texture->width + x*scalex, 0, maxSrcIdx);
+					int dstIdx = y * newWidth + x;
+					newTexData[dstIdx] = oldTexData[srcIdx];
 				}
+			}
+		}
+		else {
+			base::ResampleImage24((uint8_t*)oldImage, texture->width, texture->height,
+				(uint8_t*)newImage, newWidth, newHeight,
+				base::KernelType::KernelTypeLanczos2);
 
-				newTexData[idx] = bestIdx;
+			for (int y = 0; y < newHeight; y++) {
+				for (int x = 0; x < newWidth; x++) {
+					int idx = y * newWidth + x;
+					int r = newImage[idx * 3 + 0];
+					int g = newImage[idx * 3 + 1];
+					int b = newImage[idx * 3 + 2];
+
+					// use closest color in existing palette
+					int bestDiff = 99999;
+					int bestIdx = 0;
+					for (int k = 0; k < 256; k++) {
+						int pr = palette[k * 3 + 0];
+						int pg = palette[k * 3 + 1];
+						int pb = palette[k * 3 + 2];
+
+						int diff = abs(pr - r) + abs(pg - g) + abs(pb - b);
+						if (diff < bestDiff) {
+							bestDiff = diff;
+							bestIdx = k;
+						}
+					}
+
+					newTexData[idx] = bestIdx;
+				}
 			}
 		}
 
@@ -890,7 +1135,7 @@ void Model::dump_info(string outputPath) {
 	fout.close();
 }
 
-void Model::wavify() {
+int Model::wavify() {
 	const char* nonstandard_audio_formats[21] = {
 		"aiff", "asf", "asx", "au", "dls", "flac",
 		"fsb", "it", "m3u", "mid", "midi", "mod",
@@ -933,7 +1178,7 @@ void Model::wavify() {
 		}
 	}
 
-	cout << "Applied wav extension to " << numConverted << " audio events" << endl;
+	return numConverted;
 }
 
 bool Model::hackshade() {
@@ -956,7 +1201,6 @@ bool Model::hackshade() {
 			data.seek(mod->normindex);
 			vec3* pstudionorms = (vec3*)data.get();
 
-			bool isFlatshaded = false;
 			for (int k = 0; k < mod->nummesh; k++) {
 				data.seek(mod->meshindex + k * sizeof(mstudiomesh_t));
 				mstudiomesh_t* mesh = (mstudiomesh_t*)data.get();
@@ -966,8 +1210,21 @@ bool Model::hackshade() {
 					remappedSkin = mesh->skinref;
 				}
 
-				if (!(textures[remappedSkin].flags & (1 | 4))) {
+				int flags = textures[remappedSkin].flags;
+
+				if (!(flags & (STUDIO_NF_FLATSHADE | STUDIO_NF_FULLBRIGHT) )) {
 					continue; // not flat shaded or fullbright
+				}
+
+				if (flags & STUDIO_NF_CHROME) {
+					printf("Warning: Chrome textures can't be flatshaded (%s)\n",
+						textures[remappedSkin].name);
+					continue; // changing normals will break the chrome effect
+				}
+
+				if (flags & STUDIO_NF_FULLBRIGHT) {
+					printf("Warning: Fullbright texture converted to flatshade (%s)\n",
+						textures[remappedSkin].name);
 				}
 
 				data.seek(mesh->triindex);
@@ -987,48 +1244,259 @@ bool Model::hackshade() {
 		}
 	}
 
-	// disable "Flat Shade" and "Fullbright" flags
-	for (int i = 0; i < header->numtextures; i++) {
-		if (textures[i].flags & (1 | 4)) {
-			numFlatshades++;
-			textures[i].flags &= ~(1 | 4);
-		}
-	}
-
 	if (numFlatshades)
 		cout << "Applied flatshade normals for " << numFlatshades << " / " << header->numtextures << " textures" << endl;
 
 	return numFlatshades != 0;
 }
 
-bool Model::port_to_hl() {
-	// TODO:
-	// - rename color remap textures that arent called DM_Base
-	// - reorder animations
-	const int max_hl_pixels = 512 * 512;
+mstudioanim_t* Model::getAnimFrames(int sequence) {
+	data.seek(header->seqindex + sequence * sizeof(mstudioseqdesc_t));
+	mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
 
-	bool anyEdits = hackshade();
+	if (seq->seqgroup > 0) {
+		return NULL;
+	}
 
+	data.seek(header->seqgroupindex);
+	mstudioseqgroup_t* pseqgroup = (mstudioseqgroup_t*)data.get();
+	data.seek(pseqgroup->data + seq->animindex);
+	return (mstudioanim_t*)data.get();
+}
+
+bool Model::padAnimation(int sequence, int newFrameCount) {
+	data.seek(header->seqindex + sequence * sizeof(mstudioseqdesc_t));
+	mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
+
+	if (seq->seqgroup > 0) {
+		printf("External sequence padding not supported\n");
+		return false;
+	}
+
+	int padFrames = newFrameCount - seq->numframes;
+	if (padFrames < 0 || padFrames > 255) {
+		printf("Can't add %d frames of padding to animation\n", padFrames);
+		return false;
+	}
+
+	mstudioanim_t* panim = getAnimFrames(sequence);
+	
+	for (int b = 0; b < seq->numblends; b++) {
+		for (int i = 0; i < header->numbones; i++, panim++) {
+			for (int j = 0; j < 6; j++) {
+				if (panim->offset[j] == 0) {
+					continue; // no data
+				}
+
+				mstudioanimvalue_t* pvaluehdr = (mstudioanimvalue_t*)((uint8_t*)panim + panim->offset[j]);
+
+				int frameCount = pvaluehdr->num.total;
+				while (frameCount < seq->numframes) {
+					pvaluehdr += pvaluehdr->num.valid + 1; // 1 = skip the header too
+					frameCount += pvaluehdr->num.total;
+				}
+
+				// The last value of "valid" is repeated until "total" is reached. No need to add data.
+				pvaluehdr->num.total += padFrames;
+
+				// unless we overflow (TODO: find a model that does this)
+				if ((int)pvaluehdr->num.total + padFrames > 255) {
+					printf("Overflowed animation chunk! Model will be broken.\n");
+					return false;
+				}
+			}
+		}
+	}
+
+	seq->numframes += padFrames;
+	return true;
+}
+
+bool Model::port_sc_animations_to_hl() {
+	// duplicate existing anims
+	mstudioseqdesc_t* originalSeqs = new mstudioseqdesc_t[header->numseq];
+	memset(originalSeqs, 0, header->numseq * sizeof(mstudioseqdesc_t));
+	data.seek(header->seqindex);
+	memcpy(originalSeqs, data.get(), header->numseq * sizeof(mstudioseqdesc_t));
+
+	// reserve space for new anims 
+	int additionalSequenceCount = 11; // (6 HL anims, 2x alt idles, 2x alt shotty reload, alt jump)
+	data.seek(header->seqindex + header->numseq * sizeof(mstudioseqdesc_t));
+	insertData(originalSeqs, additionalSequenceCount * sizeof(mstudioseqdesc_t)); // dummy data
+	int originalSeqCount = header->numseq;
+	header->numseq += additionalSequenceCount;
+
+	// Map a half-life animation index to a sven co-op index. All idles map to 1 because sven only
+	// uses the 2nd idle animation. Modelers sometimes add special animations for index 0 and 2.
+	int sc_to_hl_index[77] = {
+		1, 1, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 3, 4, 64, 65, 52, 53, 12, 13, 14, 15, 16, 17, 18,
+		20, 21, 23, 24, 42, 43, 45, 46, 48, 49, 52, 53, 56, 57, 60, 61, 64, 65, 68, 69, 72, 73,
+		75, 76, 78, 79, 82, 83, 86, 87, 90, 91, 94, 95, 97, 98, 100, 101, 103, 104, 106, 107,
+		109, 110, 112, 113, 118, 119, 177, 178, 179, 180
+	};
+
+	int animBufferCount = max(256, header->numseq); // so no need for overflow checks
+	mstudioseqdesc_t* reordered_seqs = new mstudioseqdesc_t[animBufferCount];
+	bool* addedAnims = new bool[animBufferCount];
+	memset(reordered_seqs, 0, animBufferCount * sizeof(mstudioseqdesc_t));
+	memset(addedAnims, 0, animBufferCount * sizeof(bool));
+
+	int appendIdx = 0;
+	for (int i = 0; i < 77 && i < originalSeqCount; i++) {
+		int srcIdx = sc_to_hl_index[i];
+
+		if (srcIdx >= originalSeqCount) {
+			srcIdx = min(originalSeqCount, 1);
+		}
+
+		reordered_seqs[appendIdx++] = originalSeqs[srcIdx];
+		addedAnims[srcIdx] = true;
+	}
+
+	// add these animations again because the HL indexed ones will be cut short to slow them down
+	// for vanilla HL servers. The duplicates will have the full length and be used by mods.
+	addedAnims[8] = false; // jump
+	addedAnims[65] = false; // shoot shotgun
+	addedAnims[69] = false; // shoot shotgun (crouched)
+
+	bool unexpectedAnims = false;
+
+	// append all other animations that haven't been added yet
+	for (int i = 0; i < originalSeqCount; i++) {
+		if (!addedAnims[i]) {
+			if (appendIdx >= header->numseq) {
+				unexpectedAnims = true;
+				break;
+			}
+			reordered_seqs[appendIdx++] = originalSeqs[i];
+		}
+	}
+
+	// failsafe
+	while (appendIdx < header->numseq) {
+		unexpectedAnims = true;
+		reordered_seqs[appendIdx++] = originalSeqs[0];
+	}
+
+	if (unexpectedAnims) {
+		printf("The source model had unexpected animations. Expect incorrect output.\n");
+	}
+
+	// rename the unused HL animations. In HL these are all duplicates of existing anims
+	// except for shoot_1 which is a pistol shot with a slightly different aim direction.
+	const int labelSz = sizeof(reordered_seqs[0].label);
+	strncpy(reordered_seqs[12].label, "run", labelSz);
+	strncpy(reordered_seqs[13].label, "walk", labelSz);
+	strncpy(reordered_seqs[14].label, "aim_2", labelSz);
+	strncpy(reordered_seqs[15].label, "shoot_2", labelSz);
+	strncpy(reordered_seqs[16].label, "aim_1", labelSz);
+	strncpy(reordered_seqs[17].label, "shoot_1", labelSz);
+
+	// rename duplicated "idle" anims to match HL defaults
+	strncpy(reordered_seqs[0].label, "look_idle", labelSz);
+	strncpy(reordered_seqs[2].label, "deep_idle", labelSz);
+	strncpy(reordered_seqs[77].label, "look_idle2", labelSz);
+	strncpy(reordered_seqs[78].label, "deep_idle2", labelSz);
+
+	// The unused anims have no activity set.
+	for (int i = 12; i <= 17; i++) {
+		reordered_seqs[i].activity = 0;
+	}
+
+	// shorten jump animation to slow it down. The last ~100 frames aren't critical
+	// (flailing arms for a few seconds). It looks much worse to have the model finish
+	// the jump at lightning speed.
+	reordered_seqs[8].numframes = reordered_seqs[8].numframes * (34.0f / 128.0f) + 0.5f;
+
+	// shotgun shoot animations also need to be slowed down. Cutting this short
+	// removes the cocking after recoil. Not great but the speedup is worse.
+	reordered_seqs[42].numframes = reordered_seqs[42].numframes * (8.0f / 17.0f) + 0.5f;
+	reordered_seqs[44].numframes = reordered_seqs[44].numframes * (8.0f / 17.0f) + 0.5f;
+
+	// Other weapon anims are not identical speeds (gauss, mp5, hornetgun) but that's less noticeable
+	// than animation cutting will be. Snark petting is noticeably slower, but doubling its speed by
+	// looping it will make it too fast. It should be resampled to reduce frame count but that will
+	// add a lot of complication for low payoff.
+
+	// rename alternate versions of animations that were not cut short
+	strncpy(reordered_seqs[79].label, "jump2", labelSz);
+	strncpy(reordered_seqs[109].label, "ref_shoot_shotgun2", labelSz);
+	strncpy(reordered_seqs[112].label, "crouch_shoot_shotgun2", labelSz);
+
+	data.seek(header->seqindex);
+	memcpy(data.get(), reordered_seqs, header->numseq * sizeof(mstudioseqdesc_t));
+
+	int additionalSeqDataSz = additionalSequenceCount * sizeof(mstudioseqdesc_t);
+	updateIndexes(header->seqindex + originalSeqCount * sizeof(mstudioseqdesc_t), additionalSeqDataSz);
+
+	// speed up animations by repeating the last frame. The xbow is noticeably too slow, but the
+	// others could probably be skipped. No harm increasing their frame count to match HL.
+	padAnimation(70, reordered_seqs[70].numframes * (31.0f /  7.0f) + 0.5f); // xbow shoot
+	padAnimation(72, reordered_seqs[72].numframes * (31.0f /  7.0f) + 0.5f); // xbow shoot (crouched)
+	padAnimation(54, reordered_seqs[54].numframes * (16.0f / 11.0f) + 0.5f); // rpg shoot
+	padAnimation(56, reordered_seqs[56].numframes * (16.0f / 11.0f) + 0.5f); // rpg shoot (crouched)
+	padAnimation(62, reordered_seqs[62].numframes * (13.0f / 11.0f) + 0.5f); // throw snark
+	padAnimation(64, reordered_seqs[64].numframes * (13.0f / 11.0f) + 0.5f); // throw snark (crouched)
+
+	// How to test: thirdperson; maxplayers 2; sv_cheats 1; map crossfire
+
+	delete[] originalSeqs;
+	delete[] reordered_seqs;
+	delete[] addedAnims;
+
+	return true;
+}
+
+void Model::downscale_textures(int maxPixels) {
 	for (int i = 0; i < header->numtextures; i++) {
 		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
 		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
 
-		if (texture->width * texture->height <= max_hl_pixels)
+		if (texture->width * texture->height <= maxPixels)
 			continue;
 
-		float scale = sqrt((float)max_hl_pixels / (texture->width * texture->height));
-		int newWidth = texture->width * scale;
-		int newHeight = texture->height * scale;
+		float scale = sqrt((float)maxPixels / (texture->width * texture->height));
+		int newWidth = ((int)(texture->width * scale + 3) / 8) * 8;
+		int newHeight = ((int)(texture->height * scale + 3) / 8) * 8;
 
 		resizeTexture(texture->name, newWidth, newHeight);
-		anyEdits = true;
+	}
+}
+
+bool Model::port_to_hl() {
+	int modelType = get_model_type();
+
+	if (hasExternalTextures())
+		mergeExternalTextures(false);
+	if (hasExternalSequences())
+		mergeExternalSequences(false);
+
+	if (modelType == PMODEL_SVEN_COOP_5 || modelType == PMODEL_SVEN_COOP_4 || modelType == PMODEL_SVEN_COOP_3) {
+		// Sven Co-op 3.0 is the first version to break HL compatibility by removing and reordering
+		// animations. All versions after that appended more animations which HL doesn't use. Separate
+		// porting logic is needed for converting between SC versions.
+		if (modelType != PMODEL_SVEN_COOP_5) {
+			printf("Warning: This model is missing animations which will not be automatically added.\n");
+		}
+		
+		port_sc_animations_to_hl();
+	}
+	else {
+		printf("Don't know how to port this model.\n");
+		return false;
 	}
 
-	if (!anyEdits) {
-		cout << "No porting needed." << endl;
+	hackshade();
+	downscale_textures(0x80000);
+	int eventsEdited = wavify();
+
+	if (eventsEdited) {
+		printf("Applied wav extension to %d audio events\n", eventsEdited);
 	}
 
-	return anyEdits;
+	//printModelDataOrder();
+
+	return validate();
 }
 
 int Model::get_model_type() {
