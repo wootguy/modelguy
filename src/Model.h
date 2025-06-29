@@ -46,17 +46,31 @@ public:
 	// write model info to a json file
 	void dump_info(string outputPath);
 
-	// apply .wav extension to all model event sounds
-	void wavify();
+	// apply .wav extension to all model event sounds. Returns number of events edited.
+	int wavify();
 
-	// emulate flat shading by pointing all surface normals in the same direction
+	// emulate flat shaded textures by setting all surface normal lengths to zero
 	bool hackshade();
 
-	// emulate flatshade effect and resize textures that are too big
+	// get start of animation data for sequence
+	mstudioanim_t* getAnimFrames(int sequence);
+
+	// extends the animation by duplicating the last frame
+	bool padAnimation(int sequence, int newFrameCount);
+
+	// reorder to work with HL and extend/shorten anims that play too fast/slow.
+	bool port_sc_animations_to_hl();
+
+	// resize textures to the given max pixel count
+	void downscale_textures(int maxPixels);
+
+	// converts a sven co-op model for use in half-life
 	bool port_to_hl();
 
 	// figure out which mod this player model was made for
 	int get_model_type();
+
+	void printModelDataOrder(); // for debugging
 
 private:
 	string fpath;

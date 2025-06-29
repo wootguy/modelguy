@@ -228,19 +228,25 @@ typedef struct
 
 typedef struct
 {
+	// offsets to the first mstudioanimvalue_t "num" header of each coordinate type (X, Y, Z, RX, RY, RZ)
+	// offsets are relative to this anim pointer.
 	unsigned short	offset[6];
 } mstudioanim_t;
 
 // animation frames
+// 
+// Animation data is split into chunks of arrays for each coordinate type.
+// Each chunk has a header ("num") which indicates how many values there are ("valid")
+// and how many frames the values cover ("total"). The last value in the array is repeated
+// until "total" frames are filled.
 typedef union
 {
 	struct {
-		uint8_t	valid;
-		uint8_t	total;
+		uint8_t	valid; // number of non-repeated values in this array
+		uint8_t	total; // number of frames covered by this array (last valid index repeats until total)
 	} num;
-	short		value;
+	short		value; // value if interpreted as an array element
 } mstudioanimvalue_t;
-
 
 
 // body part index
