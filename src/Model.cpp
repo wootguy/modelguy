@@ -9,6 +9,7 @@
 #include "base_resample.h"
 #include <algorithm>
 #include "colors.h"
+#include <unordered_map>
 
 #ifdef _MSC_VER 
 #define strncasecmp _strnicmp
@@ -253,11 +254,19 @@ bool Model::hasExternalSequences() {
 }
 
 void Model::insertData(void* src, size_t bytes) {
+	if (bytes & 3) {
+		printf("WARNING: Inserted unaligned data length\n");
+	}
+
 	data.insert(src, bytes);
 	header = (studiohdr_t*)data.getBuffer();
 }
 
 void Model::removeData(size_t bytes) {
+	if (bytes & 3) {
+		printf("WARNING: Removed unaligned data length\n");
+	}
+
 	data.remove(bytes);
 	header = (studiohdr_t*)data.getBuffer();
 }
@@ -410,6 +419,7 @@ void Model::updateIndexes(int afterIdx, int delta) {
 void Model::printModelDataOrder() {
 	struct DataChunk {
 		int elementType; // allow shared indexes of the same type for deduplication
+		int groupType; // for data summing
 		string name;
 		int offset;
 		int size;
@@ -422,19 +432,25 @@ void Model::printModelDataOrder() {
 		ET_ANIM,
 	};
 
+	enum GROUP_TYPES {
+		GT_NONE,
+		GT_ANIM,
+		GT_TEX,
+		GT_MESH,
+	};
+
 	vector<DataChunk> chunks;
 
 	// skeleton
-	chunks.push_back({ ET_NONE, "header", 0, sizeof(studiohdr_t)});
-	chunks.push_back({ ET_NONE, "bones", header->boneindex, header->numbones * (int)sizeof(mstudiobone_t)});
-	chunks.push_back({ ET_NONE, "bone controllers", header->bonecontrollerindex, header->numbonecontrollers * (int)sizeof(mstudiobonecontroller_t) });
-	chunks.push_back({ ET_NONE, "attachments", header->attachmentindex, header->numattachments * (int)sizeof(mstudioattachment_t) });
-	chunks.push_back({ ET_NONE, "hitboxes", header->hitboxindex, header->numhitboxes * (int)sizeof(mstudiobbox_t) });
+	chunks.push_back({ ET_NONE, GT_NONE, "header", 0, sizeof(studiohdr_t)});
+	chunks.push_back({ ET_NONE, GT_NONE, "bones", header->boneindex, header->numbones * (int)sizeof(mstudiobone_t)});
+	chunks.push_back({ ET_NONE, GT_NONE, "bone controllers", header->bonecontrollerindex, header->numbonecontrollers * (int)sizeof(mstudiobonecontroller_t) });
+	chunks.push_back({ ET_NONE, GT_NONE, "attachments", header->attachmentindex, header->numattachments * (int)sizeof(mstudioattachment_t) });
+	chunks.push_back({ ET_NONE, GT_NONE, "hitboxes", header->hitboxindex, header->numhitboxes * (int)sizeof(mstudiobbox_t) });
 	
 	// sequences
-	chunks.push_back({ ET_NONE, "sequence descriptions", header->seqindex, header->numseq * (int)sizeof(mstudioseqdesc_t) });
-	chunks.push_back({ ET_NONE, "sequence groups", header->seqgroupindex, header->numseqgroups * (int)sizeof(mstudioseqgroup_t) });
-	chunks.push_back({ ET_NONE, "transitions", header->transitionindex, header->numtransitions * 1 }); // ???
+	chunks.push_back({ ET_NONE, GT_ANIM, "sequence descriptions", header->seqindex, header->numseq * (int)sizeof(mstudioseqdesc_t) });
+	chunks.push_back({ ET_NONE, GT_ANIM, "sequence groups", header->seqgroupindex, header->numseqgroups * (int)sizeof(mstudioseqgroup_t) });
 
 	// sequences
 	for (int k = 0; k < header->numseq; k++) {
@@ -442,7 +458,7 @@ void Model::printModelDataOrder() {
 		mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
 		string seqname = "sequence " + to_string(k) + " -> ";
 
-		chunks.push_back({ ET_EVT, seqname + "events", seq->eventindex, seq->numevents * (int)sizeof(mstudioevent_t)});
+		chunks.push_back({ ET_EVT, GT_ANIM, seqname + "events", seq->eventindex, seq->numevents * (int)sizeof(mstudioevent_t)});
 		
 		data.seek(header->seqgroupindex);
 		mstudioseqgroup_t* pseqgroup = (mstudioseqgroup_t*)data.get();
@@ -472,28 +488,28 @@ void Model::printModelDataOrder() {
 			}
 		}
 		
-		chunks.push_back({ ET_ANIM, seqname + "frames", pseqgroup->data + seq->animindex, animDataSz });
-		chunks.push_back({ ET_NONE, seqname + "pivots", seq->pivotindex, seq->numpivots * (int)sizeof(mstudiopivot_t) });
-		chunks.push_back({ ET_NONE, seqname + "automove positions", seq->automoveposindex, 0 });
-		chunks.push_back({ ET_NONE, seqname + "automove angles", seq->automoveangleindex, 0 });
+		chunks.push_back({ ET_ANIM, GT_ANIM, seqname + "frames", pseqgroup->data + seq->animindex, animDataSz });
+		chunks.push_back({ ET_NONE, GT_ANIM, seqname + "pivots", seq->pivotindex, seq->numpivots * (int)sizeof(mstudiopivot_t) });
+		//chunks.push_back({ ET_NONE, GT_ANIM, seqname + "automove positions", seq->automoveposindex, 0 });
+		//chunks.push_back({ ET_NONE, GT_ANIM, seqname + "automove angles", seq->automoveangleindex, 0 });
 	}
 
 	// meshes
-	chunks.push_back({ ET_NONE, "body part infos", header->bodypartindex, header->numbodyparts * (int)sizeof(mstudiobodyparts_t) });
+	chunks.push_back({ ET_NONE, GT_MESH, "body part infos", header->bodypartindex, header->numbodyparts * (int)sizeof(mstudiobodyparts_t) });
 
 	for (int i = 0; i < header->numbodyparts; i++) {
 		data.seek(header->bodypartindex + i * sizeof(mstudiobodyparts_t));
 		mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
 		string bodname = "body " + to_string(i) + " -> ";
 
-		chunks.push_back({ ET_NONE, bodname + "model infos", bod->modelindex, bod->nummodels * (int)sizeof(mstudiomodel_t) });
+		chunks.push_back({ ET_NONE, GT_MESH, bodname + "model infos", bod->modelindex, bod->nummodels * (int)sizeof(mstudiomodel_t) });
 
 		for (int k = 0; k < bod->nummodels; k++) {
 			data.seek(bod->modelindex + k * sizeof(mstudiomodel_t));
 			mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
 			string modname = bodname + "model " + to_string(k) + " -> ";
 
-			chunks.push_back({ ET_NONE, modname + "mesh infos", mod->meshindex, mod->nummesh * (int)sizeof(mstudiomesh_t) });
+			chunks.push_back({ ET_NONE, GT_MESH, modname + "mesh infos", mod->meshindex, mod->nummesh * (int)sizeof(mstudiomesh_t) });
 
 			for (int j = 0; j < mod->nummesh; j++) {
 				data.seek(mod->meshindex + j * sizeof(mstudiomesh_t));
@@ -513,33 +529,29 @@ void Model::printModelDataOrder() {
 					for (; p > 0; p--, ptricmds += 4);
 				}
 				int triDataSz = (uint8_t*)ptricmds - (uint8_t*)ptricmds_start;
-				chunks.push_back({ ET_NONE, meshname + "triangles", mesh->triindex, triDataSz });
+				chunks.push_back({ ET_NONE, GT_MESH, meshname + "triangles", mesh->triindex, triDataSz });
 			}
 
-			chunks.push_back({ ET_NONE, modname + "normals", mod->normindex, mod->numnorms * (int)sizeof(vec3) });
-			chunks.push_back({ ET_NONE, modname + "normal bone indices", mod->norminfoindex, mod->numnorms * (int)sizeof(uint8_t) });
-			chunks.push_back({ ET_NONE, modname + "vertices", mod->vertindex, mod->numverts * (int)sizeof(vec3) });
-			chunks.push_back({ ET_NONE, modname + "vertex bone indices", mod->vertinfoindex, mod->numverts * (int)sizeof(uint8_t) });
+			chunks.push_back({ ET_NONE, GT_MESH, modname + "normals", mod->normindex, mod->numnorms * (int)sizeof(vec3) });
+			chunks.push_back({ ET_NONE, GT_MESH, modname + "normal bone indices", mod->norminfoindex, mod->numnorms * (int)sizeof(uint8_t) });
+			chunks.push_back({ ET_NONE, GT_MESH, modname + "vertices", mod->vertindex, mod->numverts * (int)sizeof(vec3) });
+			chunks.push_back({ ET_NONE, GT_MESH, modname + "vertex bone indices", mod->vertinfoindex, mod->numverts * (int)sizeof(uint8_t) });
 		}
 	}
 
 	// textures
-	chunks.push_back({ ET_NONE, "texture infos", header->textureindex, header->numtextures * (int)sizeof(mstudiotexture_t) });
+	chunks.push_back({ ET_NONE, GT_TEX, "texture infos", header->textureindex, header->numtextures * (int)sizeof(mstudiotexture_t) });
 
 	for (int i = 0; i < header->numtextures; i++) {
 		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
 		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
 
 		int texSize = texture->width * texture->height + 256 * 3;
-		chunks.push_back({ ET_NONE, "texture " + to_string(i), texture->index, texSize});
+		chunks.push_back({ ET_NONE, GT_TEX, "texture " + to_string(i), texture->index, texSize});
 	}
 
-	chunks.push_back({ ET_NONE, "skins", header->skinindex, header->numskinfamilies * header->numskinref * (int)sizeof(short) });
-	chunks.push_back({ ET_NONE, "texture data index", header->texturedataindex, 0 });
-
-	// unused
-	chunks.push_back({ ET_NONE, "sounds", header->soundindex, 0 });
-	chunks.push_back({ ET_NONE, "sound groups", header->soundgroupindex, 0 });
+	chunks.push_back({ ET_NONE, GT_TEX, "skins", header->skinindex, header->numskinfamilies * header->numskinref * (int)sizeof(short) });
+	chunks.push_back({ ET_NONE, GT_TEX, "texture data index", header->texturedataindex, 0 });
 
 	sort(chunks.begin(), chunks.end(), [](const DataChunk& a, const DataChunk& b) {
 		return a.offset < b.offset;
@@ -591,6 +603,9 @@ void Model::printModelDataOrder() {
 	int totalGap = 0;
 	int totalOverlap = 0;
 	int totalAlignmentPadding = 0;
+	int totalAnimationBytes = 0;
+	int totalTextureBytes = 0;
+	int totalMeshBytes = 0;
 
 	printf("\nFile layout:\n");
 	for (int i = 0; i < chunks.size(); i++) {
@@ -618,17 +633,37 @@ void Model::printModelDataOrder() {
 			}
 		}
 
+		switch (chunk.groupType) {
+		case GT_ANIM:
+			totalAnimationBytes += chunk.size;
+			break;
+		case GT_MESH:
+			totalMeshBytes += chunk.size;
+			break;
+		case GT_TEX:
+			totalTextureBytes += chunk.size;
+			break;
+		}
+
 		string shares = "";
 		if (chunk.numShares) {
 			shares = " (" + to_string(chunk.numShares+1) + " shares)";
 		}
 
-		printf("%7d (%6d bytes) : %s%s%s\n", chunk.offset,
-			chunk.size, chunk.name.c_str(), shares.c_str(), overlap.c_str());
+		const char* unlaigned = (chunk.offset & 3) ? " (UNALIGNED)" : "";
+
+		printf("%7d (%6d bytes) : %s%s%s%s\n", chunk.offset,
+			chunk.size, chunk.name.c_str(), shares.c_str(), unlaigned, overlap.c_str());
 	}
 	printf("\nTotal overlap bytes   : %d\n", totalOverlap);
 	printf("Total mystery bytes   : %d\n", totalGap);
 	printf("Total alignment bytes : %d\n\n", totalAlignmentPadding);
+
+	int miscBytes = data.size() - (totalMeshBytes + totalAnimationBytes + totalTextureBytes);
+	printf("Mesh data      : %.1f KB\n", totalMeshBytes / 1024.0f);
+	printf("Animation data : %.1f KB\n", totalAnimationBytes / 1024.0f);
+	printf("Texture data   : %.1f KB\n", totalTextureBytes / 1024.0f);
+	printf("Misc data      : %.1f KB\n\n", miscBytes / 1024.0f);
 }
 
 bool Model::mergeExternalSequences(bool deleteSource) {
@@ -1398,9 +1433,18 @@ bool Model::port_sc_animations_to_hl() {
 	strncpy(reordered_seqs[77].label, "look_idle2", labelSz);
 	strncpy(reordered_seqs[78].label, "deep_idle2", labelSz);
 
-	// The unused anims have no activity set.
-	for (int i = 12; i <= 17; i++) {
-		reordered_seqs[i].activity = 0;
+	// set correct activities
+	ModelType* mtype = getModelType(PMODEL_HALF_LIFE);
+	if (mtype) {
+		for (int i = 0; i < mtype->anims.size() && i < header->numseq; i++) {
+			reordered_seqs[i].activity = mtype->anims[i].activity;
+		}
+		for (int i = mtype->anims.size(); i < header->numseq; i++) {
+			reordered_seqs[i].activity = 0;
+		}
+	}
+	else {
+		printf("Failed to get half-life mode info\n");
 	}
 
 	// shorten jump animation to slow it down. The last ~100 frames aren't critical
@@ -1592,4 +1636,138 @@ int Model::get_model_type() {
 
 	cout << "Model type: Unknown\n";
 	return PMODEL_UNKNOWN;
+}
+
+int Model::get_animation_size(int sequence) {
+	data.seek(header->seqindex + sequence * sizeof(mstudioseqdesc_t));
+	mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
+
+	data.seek(header->seqgroupindex);
+	mstudioseqgroup_t* pseqgroup = (mstudioseqgroup_t*)data.get();
+	data.seek(pseqgroup->data + seq->animindex);
+	mstudioanim_t* panim = (mstudioanim_t*)data.get();
+	int animDataSz = 0;
+
+	for (int b = 0; b < seq->numblends; b++) {
+		for (int i = 0; i < header->numbones; i++, panim++) {
+			animDataSz += sizeof(mstudioanim_t);
+
+			for (int j = 0; j < 6; j++) {
+				if (panim->offset[j] == 0) {
+					continue; // no data
+				}
+
+				mstudioanimvalue_t* pvaluehdr = (mstudioanimvalue_t*)((uint8_t*)panim + panim->offset[j]);
+				animDataSz += (pvaluehdr->num.valid + 1) * sizeof(mstudioanimvalue_t);
+
+				int frameCount = pvaluehdr->num.total;
+				while (frameCount < seq->numframes) {
+					pvaluehdr += pvaluehdr->num.valid + 1;
+					frameCount += pvaluehdr->num.total;
+					animDataSz += (pvaluehdr->num.valid + 1) * sizeof(mstudioanimvalue_t);
+				}
+			}
+		}
+	}
+
+	return animDataSz;
+}
+
+vector<short> Model::get_animation_data(int sequence) {
+	vector<short> values;
+
+	data.seek(header->seqindex + sequence * sizeof(mstudioseqdesc_t));
+	mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
+
+	if (seq->seqgroup > 0) {
+		printf("External sequences not supported\n");
+		return values;
+	}
+
+	mstudioanim_t* panim = getAnimFrames(sequence);
+
+	for (int b = 0; b < seq->numblends; b++) {
+		for (int i = 0; i < header->numbones; i++, panim++) {
+			for (int j = 0; j < 6; j++) {
+				if (panim->offset[j] == 0) {
+					continue; // no data
+				}
+
+				mstudioanimvalue_t* pvaluehdr = (mstudioanimvalue_t*)((uint8_t*)panim + panim->offset[j]);
+
+				int frameCount = 0;
+				do {
+					for (int k = 0; k < pvaluehdr->num.total && frameCount < seq->numframes; k++) {
+						int valIdx = min(k, pvaluehdr->num.valid);
+						values.push_back(*((short*)pvaluehdr + 1 + valIdx));
+						frameCount++;
+					}
+
+					pvaluehdr += pvaluehdr->num.valid + 1; // 1 = skip the header too
+				} while (frameCount < seq->numframes);
+			}
+		}
+	}
+
+	return values;
+}
+
+void Model::optimize() {
+	data.seek(header->seqindex);
+	mstudioseqdesc_t* seqs = (mstudioseqdesc_t*)data.get();
+
+	vector<vector<short>> animdata;
+	for (int k = 0; k < header->numseq; k++) {
+		animdata.push_back(get_animation_data(k));
+	}
+
+	unordered_map<int, int> dedups;
+	int bytesSaved = 0;
+
+	for (int i = 0; i < header->numseq; i++) {
+		for (int k = 0; k < header->numseq && k < i; k++) {
+			if (i == k)
+				continue;
+			if (animdata[i].size() > animdata[k].size())
+				continue;
+			if (seqs[i].animindex == seqs[k].animindex)
+				continue;
+			if (memcmp(&animdata[i][0], &animdata[k][0], animdata[i].size() * sizeof(short)))
+				continue;
+
+			dedups[i] = k;
+
+			if (animdata[i].size() < animdata[k].size()) {
+				printf("Animation %d is a sub animation of %d\n", i, k);
+			}
+			else {
+				printf("Animation %d is a duplicate of %d\n", i, k);
+			}
+		}
+	}
+
+	for (auto item : dedups) {
+		int dst = item.first;
+		int src = item.second;
+
+		printf("Deduplicating anim %d\n", dst);
+
+		int animOffset = seqs[dst].animindex;
+		int animSz = get_animation_size(dst);
+		animSz = animSz - (animSz & 3);
+		bytesSaved += animSz;
+
+		data.seek(animOffset);
+		removeData(animSz);
+		updateIndexes(animOffset, -animSz);
+
+		data.seek(header->seqindex);
+		seqs = (mstudioseqdesc_t*)data.get();
+		seqs[dst].animindex = seqs[src].animindex;
+		seqs[dst].numblends = seqs[src].numblends;
+	}
+
+	printModelDataOrder();
+
+	printf("Removed %d bytes\n", bytesSaved);
 }

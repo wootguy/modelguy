@@ -34,3 +34,5 @@ struct ModelType {
 };
 
 extern std::vector<ModelType> g_modelTypes;
+
+ModelType* getModelType(int modcode);
