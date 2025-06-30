@@ -1355,7 +1355,7 @@ bool Model::port_sc_animations_to_hl() {
 	memcpy(originalSeqs, data.get(), header->numseq * sizeof(mstudioseqdesc_t));
 
 	// reserve space for new anims 
-	int additionalSequenceCount = 11; // (6 HL anims, 2x alt idles, 2x alt shotty reload, alt jump)
+	int additionalSequenceCount = 12; // (6 HL anims, 2x alt idles, 2x alt shotty reload, 2x alt jumps)
 	data.seek(header->seqindex + header->numseq * sizeof(mstudioseqdesc_t));
 	insertData(originalSeqs, additionalSequenceCount * sizeof(mstudioseqdesc_t)); // dummy data
 	int originalSeqCount = header->numseq;
@@ -1391,6 +1391,7 @@ bool Model::port_sc_animations_to_hl() {
 	// add these animations again because the HL indexed ones will be cut short to slow them down
 	// for vanilla HL servers. The duplicates will have the full length and be used by mods.
 	addedAnims[8] = false; // jump
+	addedAnims[9] = false; // longjump (not cut short, but movement is very different and exploitable)
 	addedAnims[65] = false; // shoot shotgun
 	addedAnims[69] = false; // shoot shotgun (crouched)
 
@@ -1464,8 +1465,9 @@ bool Model::port_sc_animations_to_hl() {
 
 	// rename alternate versions of animations that were not cut short
 	strncpy(reordered_seqs[79].label, "jump2", labelSz);
-	strncpy(reordered_seqs[109].label, "ref_shoot_shotgun2", labelSz);
-	strncpy(reordered_seqs[112].label, "crouch_shoot_shotgun2", labelSz);
+	strncpy(reordered_seqs[80].label, "long_jump2", labelSz);
+	strncpy(reordered_seqs[110].label, "ref_shoot_shotgun2", labelSz);
+	strncpy(reordered_seqs[113].label, "crouch_shoot_shotgun2", labelSz);
 
 	data.seek(header->seqindex);
 	memcpy(data.get(), reordered_seqs, header->numseq * sizeof(mstudioseqdesc_t));
