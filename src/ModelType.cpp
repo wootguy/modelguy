@@ -1,6 +1,16 @@
 #include "ModelType.h"
 #include <vector>
 
+ModelType* getModelType(int modcode) {
+	for (int i = 0; i < g_modelTypes.size(); i++) {
+		if (g_modelTypes[i].modcode == modcode) {
+			return &g_modelTypes[i];
+		}
+	}
+
+	return NULL;
+}
+
 std::vector<ModelType> g_modelTypes = {
 	{
 		"Ricochet",

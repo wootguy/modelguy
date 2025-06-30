@@ -40,7 +40,6 @@ public:
 
 	void write(string fpath);
 
-	// caller is responsible for deleting the ptr
 	vector<vec3> getVertexes();
 
 	// write model info to a json file
@@ -71,6 +70,15 @@ public:
 	int get_model_type();
 
 	void printModelDataOrder(); // for debugging
+
+	// deduplicates data
+	void optimize();
+
+	// get animation data as an array of shorts
+	vector<short> get_animation_data(int sequence);
+
+	// get size of animation data
+	int get_animation_size(int sequence);
 
 private:
 	string fpath;

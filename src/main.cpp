@@ -95,9 +95,21 @@ void port_hl(string inputFile, string outputFile) {
 	model.write(outputFile);
 }
 
+void optimize_model(string inputFile, string outputFile) {
+	Model model(inputFile);
+	model.validate();
+	model.optimize();
+	model.write(outputFile);
+}
+
 int get_model_type(string inputFile) {
 	Model model(inputFile);
 	return model.get_model_type();
+}
+
+void data_layout_model(string inputFile) {
+	Model model(inputFile);
+	model.printModelDataOrder();
 }
 
 int view_model(string inputFile) {
@@ -173,15 +185,7 @@ int main(int argc, char* argv[])
 					newTexName = arg;
 				}
 			}
-			if (command == "info") {
-				if (i == 2) {
-					inputFile = arg;
-				}
-				else if (i == 3) {
-					outputFile = arg;
-				}
-			}
-			if (command == "wavify") {
+			if (command == "info" || command == "layout" || command == "wavify" || command == "optimize") {
 				if (i == 2) {
 					inputFile = arg;
 				}
@@ -208,7 +212,9 @@ int main(int argc, char* argv[])
 			"  porthl : Port a Sven Co-op player model to Half-Life. Takes <input.mdl> and <outpu.mdl> as parameters.\n"
 			"  type   : Identify player model type. The return code is unique per mod.\n"
 			"  view   : View the model in 3D.\n"
-			"  image  : Saves a PNG image of the model. Takes <width>x<height> and <output.png> as parameters.\n\n"
+			"  image  : Saves a PNG image of the model. Takes <width>x<height> and <output.png> as parameters.\n"
+			"  layout : Show data layout for the MDL file.\n"
+			"  optimize : deduplicate data.\n\n"
 
 			"\nExamples:\n"
 			"  modelguy merge barney.mdl\n"
@@ -312,6 +318,17 @@ int main(int argc, char* argv[])
 		}
 		port_hl(inputFile, outputFile);
 	}
+	else if (command == "optimize") {
+		if (inputFile.size() == 0) {
+			cout << "ERROR: No input file specified\n";
+			return 1;
+		}
+		if (outputFile.size() == 0) {
+			cout << "ERROR: No output file specified\n";
+			return 1;
+		}
+		optimize_model(inputFile, outputFile);
+	}
 	else if (command == "type") {
 		if (inputFile.size() == 0) {
 			cout << "ERROR: No input file specified\n";
@@ -325,6 +342,13 @@ int main(int argc, char* argv[])
 			return 1;
 		}
 		return view_model(inputFile);
+	}
+	else if (command == "layout") {
+		if (inputFile.size() == 0) {
+			cout << "ERROR: No input file specified\n";
+			return 1;
+		}
+		data_layout_model(inputFile);
 	}
 	else if (command == "image") {
 		if (inputFile.size() == 0) {
