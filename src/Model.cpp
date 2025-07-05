@@ -1216,75 +1216,6 @@ int Model::wavify() {
 	return numConverted;
 }
 
-bool Model::hackshade() {
-	data.seek(header->skinindex);
-	short* skins = (short*)data.get();
-
-	data.seek(header->textureindex);
-	mstudiotexture_t* textures = (mstudiotexture_t*)data.get();
-	int numFlatshades = 0;
-
-	for (int b = 0; b < header->numbodyparts; b++) {
-		// Try loading required model info
-		data.seek(header->bodypartindex + b * sizeof(mstudiobodyparts_t));
-		mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
-
-		for (int i = 0; i < bod->nummodels; i++) {
-			data.seek(bod->modelindex + i * sizeof(mstudiomodel_t));
-			mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
-
-			data.seek(mod->normindex);
-			vec3* pstudionorms = (vec3*)data.get();
-
-			for (int k = 0; k < mod->nummesh; k++) {
-				data.seek(mod->meshindex + k * sizeof(mstudiomesh_t));
-				mstudiomesh_t* mesh = (mstudiomesh_t*)data.get();
-
-				short remappedSkin = skins[mesh->skinref];
-				if (remappedSkin < 0 || remappedSkin >= header->numtextures) {
-					remappedSkin = mesh->skinref;
-				}
-
-				int flags = textures[remappedSkin].flags;
-
-				if (!(flags & (STUDIO_NF_FLATSHADE | STUDIO_NF_FULLBRIGHT) )) {
-					continue; // not flat shaded or fullbright
-				}
-
-				if (flags & STUDIO_NF_CHROME) {
-					printf("Warning: Chrome textures can't be flatshaded (%s)\n",
-						textures[remappedSkin].name);
-					continue; // changing normals will break the chrome effect
-				}
-
-				if (flags & STUDIO_NF_FULLBRIGHT) {
-					printf("Warning: Fullbright texture converted to flatshade (%s)\n",
-						textures[remappedSkin].name);
-				}
-
-				data.seek(mesh->triindex);
-				short* ptricmds = (short*)data.get();
-				int p;
-
-				while (p = *(ptricmds++)) {
-					if (p < 0) {
-						p = -p;
-					}
-
-					for (; p > 0; p--, ptricmds += 4) {
-						pstudionorms[ptricmds[1]] = vec3(0,0,0);
-					}
-				}
-			}
-		}
-	}
-
-	if (numFlatshades)
-		cout << "Applied flatshade normals for " << numFlatshades << " / " << header->numtextures << " textures" << endl;
-
-	return numFlatshades != 0;
-}
-
 mstudioanim_t* Model::getAnimFrames(int sequence) {
 	data.seek(header->seqindex + sequence * sizeof(mstudioseqdesc_t));
 	mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
@@ -1532,7 +1463,6 @@ bool Model::port_to_hl() {
 		return false;
 	}
 
-	hackshade();
 	downscale_textures(0x80000);
 	int eventsEdited = wavify();
 

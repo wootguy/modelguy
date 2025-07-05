@@ -48,9 +48,6 @@ public:
 	// apply .wav extension to all model event sounds. Returns number of events edited.
 	int wavify();
 
-	// emulate flat shaded textures by setting all surface normal lengths to zero
-	bool hackshade();
-
 	// get start of animation data for sequence
 	mstudioanim_t* getAnimFrames(int sequence);
 
