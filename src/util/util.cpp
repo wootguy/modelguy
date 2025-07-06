@@ -5,6 +5,12 @@
 #include <algorithm>
 #include <chrono>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <sys/stat.h>
+#endif
+
 using namespace std::chrono;
 
 bool fileExists(const string& fileName)
@@ -114,4 +120,31 @@ char* strcpy_safe(char* dest, const char* src, size_t size) {
 		dest[i] = '\0';
 	}
 	return dest;
+}
+
+uint64_t getFileModifiedTime(const std::string& path) {
+#ifdef _WIN32
+	WIN32_FILE_ATTRIBUTE_DATA fileInfo;
+	if (!GetFileAttributesExA(path.c_str(), GetFileExInfoStandard, &fileInfo)) {
+		return -1;
+	}
+
+	ULARGE_INTEGER ull;
+	ull.LowPart = fileInfo.ftLastWriteTime.dwLowDateTime;
+	ull.HighPart = fileInfo.ftLastWriteTime.dwHighDateTime;
+
+	// Convert FILETIME (100-ns intervals since 1601) to seconds since UNIX epoch (1970)
+	const uint64_t EPOCH_DIFF = 116444736000000000ULL; // 100ns ticks between 1601 and 1970
+	const uint64_t HUNDRED_NANOSECONDS = 10000000ULL;
+
+	return (ull.QuadPart - EPOCH_DIFF) / HUNDRED_NANOSECONDS;
+
+#else
+	struct stat result;
+	if (stat(path.c_str(), &result) != 0) {
+		return -1;
+	}
+
+	return result.st_mtime;
+#endif
 }
