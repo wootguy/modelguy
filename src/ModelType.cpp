@@ -1,5 +1,6 @@
 #include "ModelType.h"
 #include <vector>
+#include <cstddef>
 
 ModelType* getModelType(int modcode) {
 	for (int i = 0; i < g_modelTypes.size(); i++) {

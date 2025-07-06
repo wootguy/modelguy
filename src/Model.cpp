@@ -1037,6 +1037,7 @@ void Model::dump_info(string outputPath) {
 		mergeExternalSequences(false);
 
 	obj["size"] = data.size();
+	obj["date"] = getFileModifiedTime(fpath);
 
 	MD5 hash = MD5();
 	hash.add(data.getBuffer(), data.size());
@@ -1470,6 +1471,8 @@ bool Model::port_to_hl() {
 		printf("Applied wav extension to %d audio events\n", eventsEdited);
 	}
 
+	// TODO: Add flatshade flag to fullbright textures
+
 	//printModelDataOrder();
 
 	return validate();
@@ -1630,7 +1633,7 @@ vector<short> Model::get_animation_data(int sequence) {
 				int frameCount = 0;
 				do {
 					for (int k = 0; k < pvaluehdr->num.total && frameCount < seq->numframes; k++) {
-						int valIdx = min(k, pvaluehdr->num.valid);
+						int valIdx = min(k, (int)pvaluehdr->num.valid);
 						values.push_back(*((short*)pvaluehdr + 1 + valIdx));
 						frameCount++;
 					}
