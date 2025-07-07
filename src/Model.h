@@ -25,6 +25,9 @@ public:
 	// has at least a model01.mdl?
 	bool hasExternalSequences(); 
 
+	// textures affected by topcolor/bottomcolor
+	bool hasRemappableTextures();
+
 	// model has no triangles?
 	bool isEmpty();
 
