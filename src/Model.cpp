@@ -253,6 +253,20 @@ bool Model::hasExternalSequences() {
 	return header->numseqgroups > 1;
 }
 
+bool Model::hasRemappableTextures() {
+	for (int i = 0; i < header->numtextures; i++) {
+		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
+		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
+		string texName = toLowerCase(texture->name);
+
+		if (texName == "dm_base.bmp" || texName.find("remap") == 0) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 void Model::insertData(void* src, size_t bytes) {
 	if (bytes & 3) {
 		printf("WARNING: Inserted unaligned data length\n");
@@ -1036,8 +1050,15 @@ void Model::dump_info(string outputPath) {
 	if (hasExternalSequences())
 		mergeExternalSequences(false);
 
+	string fpath_noext = fpath.substr(0, fpath.size() - 4);
+
 	obj["size"] = data.size();
 	obj["date"] = getFileModifiedTime(fpath);
+	obj["colorable"] = hasRemappableTextures();
+	obj["readme"] = fileExists(fpath_noext + ".txt");
+	obj["preview"] = fileExists(fpath_noext + ".bmp");
+	obj["metahook_external"] = fileExists(fpath_noext + "_external.txt");
+	obj["metahook_ragdoll"] = fileExists(fpath_noext + "_ragdoll.txt");
 
 	MD5 hash = MD5();
 	hash.add(data.getBuffer(), data.size());
