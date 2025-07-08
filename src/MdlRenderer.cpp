@@ -344,7 +344,7 @@ void MdlRenderer::loadData() {
 	}
 
 	memset(iController, 127, 4);
-	memset(iBlender, 0, 2);
+	memset(iBlender, 127, 2);
 	memset(cachedBounds, 0, sizeof(cachedBounds));
 	iMouth = 0;
 
