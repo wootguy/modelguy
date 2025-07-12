@@ -16,7 +16,7 @@ std::vector<ModelType> g_modelTypes = {
 	{
 		"Ricochet",
 		PMODEL_RICOCHET,
-		0x80000,
+		0x40000,
 		{
 			{0, "dummy1"},
 			{7, "jump"},
@@ -63,7 +63,7 @@ std::vector<ModelType> g_modelTypes = {
 	{
 		"Earth's Special Forces",
 		PMODEL_EARTHS_SPECIAL_FORCES,
-		0x80000,
+		0x40000,
 		{
 			{0, "ref_autopunch"},
 			{0, "ref_autopunch_hit"},
@@ -166,7 +166,7 @@ std::vector<ModelType> g_modelTypes = {
 	{
 		"Action Half-Life",
 		PMODEL_ACTION_HALF_LIFE,
-		0x80000,
+		0x40000,
 		{
 			{1, "look_idle"},
 			{1, "idle"},
@@ -393,7 +393,7 @@ std::vector<ModelType> g_modelTypes = {
 	{
 		"Vampire Slayer",
 		PMODEL_VAMPIRE_SLAYER,
-		0x80000,
+		0x40000,
 		{
 			{1, "look_idle"},
 			{1, "idle"},
@@ -469,7 +469,7 @@ std::vector<ModelType> g_modelTypes = {
 	{
 		"Half-Life", // or DMC
 		PMODEL_HALF_LIFE,
-		0x80000,
+		0x40000,
 		{
 			{1, "look_idle"},
 			{1, "idle"},
@@ -554,7 +554,7 @@ std::vector<ModelType> g_modelTypes = {
 	{
 		"Team Fortress",
 		PMODEL_TEAM_FORTRESS,
-		0x80000,
+		0x40000,
 		{
 			{1, "look_idle"},
 			{1, "idle"},
@@ -639,7 +639,7 @@ std::vector<ModelType> g_modelTypes = {
 	{
 		"Counter-Strike",
 		PMODEL_COUNTER_STRIKE,
-		0x80000,
+		0x40000,
 		{
 			{0, "dummy"},
 			{1, "idle1"},
@@ -758,7 +758,7 @@ std::vector<ModelType> g_modelTypes = {
 	{
 		"Sven Co-op 3.0",
 		PMODEL_SVEN_COOP_3,
-		0x80000,
+		0x40000,
 		{
 			{1, "look_idle"},
 			{1, "idle"},
@@ -928,7 +928,7 @@ std::vector<ModelType> g_modelTypes = {
 	{
 		"The Specialists",
 		PMODEL_THE_SPECIALISTS,
-		0x80000,
+		0x40000,
 		{
 			{0, "empty"},
 			{0, "standard_idle"},
@@ -1107,7 +1107,7 @@ std::vector<ModelType> g_modelTypes = {
 	{
 		"Sven Co-op 4.x",
 		PMODEL_SVEN_COOP_4,
-		0x80000,
+		0x40000,
 		{
 			{1, "look_idle"},
 			{1, "idle"},
@@ -1496,7 +1496,7 @@ std::vector<ModelType> g_modelTypes = {
 	{
 		"Day of Defeat",
 		PMODEL_DAY_OF_DEFEAT,
-		0x80000,
+		0x40000,
 		{
 			{1, "look_idle"},
 			{1, "dod_idle1"},
