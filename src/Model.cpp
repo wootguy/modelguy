@@ -1485,14 +1485,22 @@ bool Model::port_to_hl() {
 		return false;
 	}
 
-	downscale_textures(0x80000);
+	downscale_textures(0x40000);
 	int eventsEdited = wavify();
 
 	if (eventsEdited) {
 		printf("Applied wav extension to %d audio events\n", eventsEdited);
 	}
 
-	// TODO: Add flatshade flag to fullbright textures
+	for (int i = 0; i < header->numtextures; i++) {
+		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
+		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
+
+		if ((texture->flags & STUDIO_NF_FULLBRIGHT)) {
+			printf("Fullbright not supported in HL (converted to flatshade): %s\n", texture->name);
+			texture->flags |= STUDIO_NF_FLATSHADE;
+		}
+	}
 
 	//printModelDataOrder();
 
