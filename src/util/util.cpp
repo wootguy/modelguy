@@ -148,3 +148,18 @@ uint64_t getFileModifiedTime(const std::string& path) {
 	return result.st_mtime;
 #endif
 }
+
+string getFileName(const string& path) {
+	string ret = path;
+
+	size_t start = path.find_last_of("/\\");
+	if (start != string::npos)
+		ret = ret.substr(start+1);
+
+	size_t end = ret.find_last_of(".");
+	if (end != string::npos) {
+		ret = ret.substr(0, end);
+	}
+
+	return ret;
+}

@@ -64,10 +64,10 @@ public:
 	void downscale_textures(int maxPixels);
 
 	// converts a sven co-op model for use in half-life
-	bool port_to_hl();
+	bool port_to_hl(bool forcePortFromSven=false);
 
 	// figure out which mod this player model was made for
-	int get_model_type();
+	int get_model_type(bool printResult=false);
 
 	void printModelDataOrder(); // for debugging
 

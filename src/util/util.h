@@ -28,3 +28,5 @@ double TimeDifference(uint64_t start, uint64_t end);
 char* strcpy_safe(char* dest, const char* src, size_t size);
 
 uint64_t getFileModifiedTime(const std::string& path);
+
+string getFileName(const string& path);
