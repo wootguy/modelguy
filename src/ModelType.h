@@ -16,6 +16,7 @@ enum model_types {
 	PMODEL_THE_SPECIALISTS,
 	PMODEL_ACTION_HALF_LIFE,
 	PMODEL_EARTHS_SPECIAL_FORCES,
+	PMODEL_HALF_LIFE_COOP, // HL model with SC anims appended for backwards compatability
 };
 
 struct AnimDesc {

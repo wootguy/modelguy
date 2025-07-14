@@ -109,7 +109,7 @@ void optimize_model(string inputFile, string outputFile) {
 
 int get_model_type(string inputFile) {
 	Model model(inputFile);
-	return model.get_model_type();
+	return model.get_model_type(true);
 }
 
 void data_layout_model(string inputFile) {
