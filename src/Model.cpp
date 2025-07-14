@@ -1059,6 +1059,7 @@ void Model::dump_info(string outputPath) {
 	obj["preview"] = fileExists(fpath_noext + ".bmp");
 	obj["metahook_external"] = fileExists(fpath_noext + "_external.txt");
 	obj["metahook_ragdoll"] = fileExists(fpath_noext + "_ragdoll.txt");
+	obj["modid"] = get_model_type(false);
 
 	MD5 hash = MD5();
 	hash.add(data.getBuffer(), data.size());
@@ -1258,6 +1259,11 @@ bool Model::padAnimation(int sequence, int newFrameCount) {
 
 	if (seq->seqgroup > 0) {
 		printf("External sequence padding not supported\n");
+		return false;
+	}
+
+	if (sequence > header->numseq) {
+		printf("Can't pad animation %d (model has only %d animations)\n", sequence, header->numseq);
 		return false;
 	}
 
@@ -1462,15 +1468,15 @@ void Model::downscale_textures(int maxPixels) {
 	}
 }
 
-bool Model::port_to_hl() {
-	int modelType = get_model_type();
+bool Model::port_to_hl(bool forcePortFromSven) {
+	int modelType = get_model_type(false);
 
 	if (hasExternalTextures())
 		mergeExternalTextures(false);
 	if (hasExternalSequences())
 		mergeExternalSequences(false);
 
-	if (modelType == PMODEL_SVEN_COOP_5 || modelType == PMODEL_SVEN_COOP_4 || modelType == PMODEL_SVEN_COOP_3) {
+	if (forcePortFromSven || modelType == PMODEL_SVEN_COOP_5 || modelType == PMODEL_SVEN_COOP_4 || modelType == PMODEL_SVEN_COOP_3) {
 		// Sven Co-op 3.0 is the first version to break HL compatibility by removing and reordering
 		// animations. All versions after that appended more animations which HL doesn't use. Separate
 		// porting logic is needed for converting between SC versions.
@@ -1480,8 +1486,26 @@ bool Model::port_to_hl() {
 		
 		port_sc_animations_to_hl();
 	}
+	else if (modelType == PMODEL_HALF_LIFE) {
+		printf("This is a Half-Life model. No porting needed.\n");
+		return false;
+	}
 	else {
+		get_model_type(true);
 		printf("Don't know how to port this model.\n");
+
+		string modelname = getFileName(fpath);
+		string answer;
+		printf("Do you want to force porting '%s' as if it were a Sven Co-op model? (y/n): ", modelname.c_str());
+		getline(cin, answer);  // reads entire line including spaces
+		if (answer.find("y") != string::npos) {
+			printf("Forcing port!\n");
+			return port_to_hl(true);
+		}
+		else {
+			printf("Port aborted.\n");
+		}
+
 		return false;
 	}
 
@@ -1507,10 +1531,17 @@ bool Model::port_to_hl() {
 	return validate();
 }
 
-int Model::get_model_type() {
+int Model::get_model_type(bool printResult) {
 	if (isExtModel()) {
-		cout << "Model type: External textures/animations\n";
+		if (printResult)
+			cout << "Model type: External textures/animations\n";
 		return PMODEL_EXTERNAL;
+	}
+
+	for (ModelType& mtype : g_modelTypes) {
+		mtype.num_match_act = 0;
+		mtype.num_match_name = 0;
+		mtype.match_percent = 0;
 	}
 
 	int biggestTextureSize = 0;
@@ -1561,7 +1592,8 @@ int Model::get_model_type() {
 
 		// not comparing names because some modelers write their names in animation labels
 		if (mtype.num_match_act == mtype.anims.size()) {
-			cout << "Model type: " << mtype.modname << " (100% match)\n";
+			if (printResult)
+				cout << "Model type: " << mtype.modname << " (100% match)\n";
 			return mtype.modcode;
 		}
 		
@@ -1581,7 +1613,8 @@ int Model::get_model_type() {
 
 	if ((bestMatchPer > 0.95f && secondBestMatchPer < 0.85f) || (bestMatchPer > 0.90f && secondBestMatchPer < 0.75f)) {
 		ModelType& mtype = g_modelTypes[bestMatch];
-		cout << "Model type: " << mtype.modname << " (" << (int)(bestMatchPer * 100) << "% match)\n";
+		if (printResult)
+			cout << "Model type: " << mtype.modname << " (" << (int)(bestMatchPer * 100) << "% match)\n";
 		return mtype.modcode;
 	}
 
@@ -1592,13 +1625,14 @@ int Model::get_model_type() {
 
 	for (int i = 0; i < g_modelTypes.size(); i++) {
 		ModelType& mtype = g_modelTypes[i];
-		if (mtype.match_percent > 0)
+		if (mtype.match_percent > 0 && printResult)
 			printf("%-22s = %3d / %-3d  match (%d%%)\n", mtype.modname,
 				mtype.num_match_act + mtype.num_match_name, mtype.anims.size()*2,
 				(int)(mtype.match_percent * 100));
 	}
 
-	cout << "Model type: Unknown\n";
+	if (printResult)
+		cout << "Model type: Unknown\n";
 	return PMODEL_UNKNOWN;
 }
 

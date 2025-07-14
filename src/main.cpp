@@ -88,11 +88,16 @@ void wavify(string inputFile, string outputFile) {
 	model.write(outputFile);
 }
 
-void port_hl(string inputFile, string outputFile) {
+int port_hl(string inputFile, string outputFile) {
 	Model model(inputFile);
 	model.validate();
-	model.port_to_hl();
+	
+	if (!model.port_to_hl()) {
+		return 1;
+	}
+	
 	model.write(outputFile);
+	return 0;
 }
 
 void optimize_model(string inputFile, string outputFile) {
@@ -209,7 +214,7 @@ int main(int argc, char* argv[])
 			"  rename : Renames a texture. Takes <old name> <new name> as parameters.\n"
 			"  info   : Write model info to a JSON file. Takes <input.mdl> <output.json> as parameters.\n"
 			"  wavify : Apply .wav extension to all events. Takes <input.mdl> <output.json> as parameters\.n\n"
-			"  porthl : Port a Sven Co-op player model to Half-Life. Takes <input.mdl> and <outpu.mdl> as parameters.\n"
+			"  porthl : Port a Sven Co-op player model to Half-Life. Takes <input.mdl> and <output.mdl> as parameters.\n"
 			"  type   : Identify player model type. The return code is unique per mod.\n"
 			"  view   : View the model in 3D.\n"
 			"  image  : Saves a PNG image of the model. Takes <width>x<height> and <output.png> as parameters.\n"
@@ -316,7 +321,7 @@ int main(int argc, char* argv[])
 			cout << "ERROR: No output file specified\n";
 			return 1;
 		}
-		port_hl(inputFile, outputFile);
+		return port_hl(inputFile, outputFile);
 	}
 	else if (command == "optimize") {
 		if (inputFile.size() == 0) {
