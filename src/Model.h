@@ -61,7 +61,7 @@ public:
 	bool port_sc_animations_to_hl();
 
 	// resize textures to the given max pixel count
-	void downscale_textures(int maxPixels);
+	bool port_sc_textures_to_hl(int maxPixels);
 
 	// converts a sven co-op model for use in half-life
 	bool port_to_hl(bool forcePortFromSven=false);

@@ -828,13 +828,8 @@ bool Model::resizeTexture(string texName, int newWidth, int newHeight) {
 		int newSize = newWidth * newHeight;
 		int palSize = 256 * 3;
 
-		if (newSize > oldSize) {
-			cout << "Resize failed. New texture size is larger than current size.\n";
-			return false;
-		}
-
-		if (newSize % 8) {
-			cout << "Resize failed. New texture pixel count is not divisible by 8.\n";
+		if (newSize % 16) {
+			cout << "Resize failed. New texture pixel count is not divisible by 16.\n";
 			return false;
 		}
 
@@ -903,6 +898,22 @@ bool Model::resizeTexture(string texName, int newWidth, int newHeight) {
 			}
 		}
 
+		if (newSize > oldSize) {
+			int addBytes = newSize - oldSize;
+			
+			uint8_t* dummyData = new uint8_t[addBytes];
+			memset(dummyData, 0, addBytes);
+			
+			data.seek(texture->index + oldSize);
+			insertData(dummyData, addBytes);
+			delete[] dummyData;
+
+			data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
+			texture = (mstudiotexture_t*)data.get();
+
+			updateIndexes(texture->index + oldSize, addBytes);
+		}
+
 		data.seek(texture->index);
 		data.write(newTexData, newSize);
 		data.write(palette, palSize);
@@ -910,10 +921,12 @@ bool Model::resizeTexture(string texName, int newWidth, int newHeight) {
 		texture->width = newWidth;
 		texture->height = newHeight;
 
-		size_t removeAt = data.tell();
-		int removeBytes = oldSize - newSize;
-		removeData(removeBytes);
-		updateIndexes(removeAt, -removeBytes);
+		if (newSize < oldSize) {
+			size_t removeAt = data.tell();
+			int removeBytes = oldSize - newSize;
+			removeData(removeBytes);
+			updateIndexes(removeAt, -removeBytes);
+		}		
 
 		header->length = data.size();
 
@@ -1452,7 +1465,10 @@ bool Model::port_sc_animations_to_hl() {
 	return true;
 }
 
-void Model::downscale_textures(int maxPixels) {
+bool Model::port_sc_textures_to_hl(int maxPixels) {
+	bool anyFailed = false;
+
+	// limit texture size to maxPixels to prevent client crash
 	for (int i = 0; i < header->numtextures; i++) {
 		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
 		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
@@ -1461,11 +1477,59 @@ void Model::downscale_textures(int maxPixels) {
 			continue;
 
 		float scale = sqrt((float)maxPixels / (texture->width * texture->height));
-		int newWidth = ((int)(texture->width * scale + 3) / 8) * 8;
-		int newHeight = ((int)(texture->height * scale + 3) / 8) * 8;
+		int newWidth = ((int)(texture->width * scale + 3) / 4) * 4;
+		int newHeight = ((int)(texture->height * scale + 3) / 4) * 4;
 
-		resizeTexture(texture->name, newWidth, newHeight);
+		if (!resizeTexture(texture->name, newWidth, newHeight)) {
+			anyFailed = true;
+		}
 	}
+
+	// round pixel count to multiple of 16 to fix "GL_Upload16: s&3" client crash
+	for (int i = 0; i < header->numtextures; i++) {
+		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
+		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
+
+		if (((texture->width * texture->height) & 3) == 0)
+			continue;
+
+		int newWidth = ((int)(texture->width) / 4) * 4;
+		int newHeight = ((int)(texture->height) / 4) * 4;
+
+		if (!resizeTexture(texture->name, newWidth, newHeight)) {
+			anyFailed = true;
+		}
+	}
+
+	// chrome textures must be 64x64 or else they start stretching/tiling
+	// which breaks the eye tracking used in some models.
+	for (int i = 0; i < header->numtextures; i++) {
+		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
+		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
+
+		if (!(texture->flags & STUDIO_NF_CHROME)) {
+			continue;
+		}
+		if (texture->width == 64 && texture->height == 64) {
+			continue;
+		}
+
+		if (!resizeTexture(texture->name, 64, 64)) {
+			anyFailed = true;
+		}
+	}
+
+	for (int i = 0; i < header->numtextures; i++) {
+		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
+		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
+
+		if ((texture->flags & STUDIO_NF_FULLBRIGHT)) {
+			printf("Fullbright not supported in HL (converted to flatshade): %s\n", texture->name);
+			texture->flags |= STUDIO_NF_FLATSHADE;
+		}
+	}
+
+	return !anyFailed;
 }
 
 bool Model::port_to_hl(bool forcePortFromSven) {
@@ -1509,26 +1573,16 @@ bool Model::port_to_hl(bool forcePortFromSven) {
 		return false;
 	}
 
-	downscale_textures(0x40000);
+	bool downscaleSuccess = port_sc_textures_to_hl(0x40000);
 	int eventsEdited = wavify();
 
 	if (eventsEdited) {
 		printf("Applied wav extension to %d audio events\n", eventsEdited);
 	}
 
-	for (int i = 0; i < header->numtextures; i++) {
-		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
-		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
-
-		if ((texture->flags & STUDIO_NF_FULLBRIGHT)) {
-			printf("Fullbright not supported in HL (converted to flatshade): %s\n", texture->name);
-			texture->flags |= STUDIO_NF_FLATSHADE;
-		}
-	}
-
 	//printModelDataOrder();
 
-	return validate();
+	return validate() && downscaleSuccess;
 }
 
 int Model::get_model_type(bool printResult) {
