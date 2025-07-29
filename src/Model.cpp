@@ -1465,8 +1465,9 @@ bool Model::port_sc_animations_to_hl() {
 	return true;
 }
 
-bool Model::port_sc_textures_to_hl(int maxPixels) {
+int Model::port_sc_textures_to_hl(int maxPixels) {
 	bool anyFailed = false;
+	bool anyChanges = false;
 
 	// limit texture size to maxPixels to prevent client crash
 	for (int i = 0; i < header->numtextures; i++) {
@@ -1483,6 +1484,7 @@ bool Model::port_sc_textures_to_hl(int maxPixels) {
 		if (!resizeTexture(texture->name, newWidth, newHeight)) {
 			anyFailed = true;
 		}
+		anyChanges = true;
 	}
 
 	// round pixel count to multiple of 16 to fix "GL_Upload16: s&3" client crash
@@ -1499,6 +1501,7 @@ bool Model::port_sc_textures_to_hl(int maxPixels) {
 		if (!resizeTexture(texture->name, newWidth, newHeight)) {
 			anyFailed = true;
 		}
+		anyChanges = true;
 	}
 
 	// chrome textures must be 64x64 or else they start stretching/tiling
@@ -1517,63 +1520,76 @@ bool Model::port_sc_textures_to_hl(int maxPixels) {
 		if (!resizeTexture(texture->name, 64, 64)) {
 			anyFailed = true;
 		}
+		anyChanges = true;
 	}
 
 	for (int i = 0; i < header->numtextures; i++) {
 		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
 		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
 
-		if ((texture->flags & STUDIO_NF_FULLBRIGHT)) {
+		if ((texture->flags & STUDIO_NF_FULLBRIGHT) && !(texture->flags & STUDIO_NF_FLATSHADE)) {
 			printf("Fullbright not supported in HL (converted to flatshade): %s\n", texture->name);
 			texture->flags |= STUDIO_NF_FLATSHADE;
+			anyChanges = true;
 		}
 	}
 
-	return !anyFailed;
+	if (anyFailed)
+		return 0;
+
+	return anyChanges ? 1 : 2;
 }
 
-bool Model::port_to_hl(bool forcePortFromSven) {
+int Model::port_to_hl(bool forcePortFromSven, bool noanim) {
 	int modelType = get_model_type(false);
+	bool anyPortingDone = false;
 
-	if (hasExternalTextures())
+	if (hasExternalTextures()) {
 		mergeExternalTextures(false);
-	if (hasExternalSequences())
+		anyPortingDone = true;
+	}
+	if (hasExternalSequences()) {
 		mergeExternalSequences(false);
+		anyPortingDone = true;
+	}
 
-	if (forcePortFromSven || modelType == PMODEL_SVEN_COOP_5 || modelType == PMODEL_SVEN_COOP_4 || modelType == PMODEL_SVEN_COOP_3) {
-		// Sven Co-op 3.0 is the first version to break HL compatibility by removing and reordering
-		// animations. All versions after that appended more animations which HL doesn't use. Separate
-		// porting logic is needed for converting between SC versions.
-		if (modelType != PMODEL_SVEN_COOP_5) {
-			printf("Warning: This model is missing animations which will not be automatically added.\n");
+	if (!noanim) {
+		if (forcePortFromSven || modelType == PMODEL_SVEN_COOP_5 || modelType == PMODEL_SVEN_COOP_4 || modelType == PMODEL_SVEN_COOP_3) {
+			// Sven Co-op 3.0 is the first version to break HL compatibility by removing and reordering
+			// animations. All versions after that appended more animations which HL doesn't use. Separate
+			// porting logic is needed for converting between SC versions.
+			if (modelType != PMODEL_SVEN_COOP_5) {
+				printf("Warning: This model is missing animations which will not be automatically added.\n");
+			}
+
+			port_sc_animations_to_hl();
+			anyPortingDone = true;
 		}
-		
-		port_sc_animations_to_hl();
-	}
-	else if (modelType == PMODEL_HALF_LIFE) {
-		printf("This is a Half-Life model. No porting needed.\n");
-		return false;
-	}
-	else {
-		get_model_type(true);
-		printf("Don't know how to port this model.\n");
-
-		string modelname = getFileName(fpath);
-		string answer;
-		printf("Do you want to force porting '%s' as if it were a Sven Co-op model? (y/n): ", modelname.c_str());
-		getline(cin, answer);  // reads entire line including spaces
-		if (answer.find("y") != string::npos) {
-			printf("Forcing port!\n");
-			return port_to_hl(true);
+		else if (modelType == PMODEL_HALF_LIFE) {
+			printf("This is a Half-Life model. No porting needed.\n");
+			return 0;
 		}
 		else {
-			printf("Port aborted.\n");
-		}
+			get_model_type(true);
+			printf("Don't know how to port this model.\n");
 
-		return false;
+			string modelname = getFileName(fpath);
+			string answer;
+			printf("Do you want to force porting '%s' as if it were a Sven Co-op model? (y/n): ", modelname.c_str());
+			getline(cin, answer);  // reads entire line including spaces
+			if (answer.find("y") != string::npos) {
+				printf("Forcing port!\n");
+				return port_to_hl(true);
+			}
+			else {
+				printf("Port aborted.\n");
+			}
+
+			return 0;
+		}
 	}
 
-	bool downscaleSuccess = port_sc_textures_to_hl(0x40000);
+	int texEditResult = port_sc_textures_to_hl(0x40000);
 	int eventsEdited = wavify();
 
 	if (eventsEdited) {
@@ -1581,8 +1597,15 @@ bool Model::port_to_hl(bool forcePortFromSven) {
 	}
 
 	//printModelDataOrder();
+	if (!validate() || texEditResult == 0) {
+		return 0;
+	}
 
-	return validate() && downscaleSuccess;
+	if (texEditResult == 1 || eventsEdited != 0) {
+		anyPortingDone = true;
+	}
+
+	return anyPortingDone ? 1 : 2;
 }
 
 int Model::get_model_type(bool printResult) {

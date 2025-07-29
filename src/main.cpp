@@ -88,11 +88,16 @@ void wavify(string inputFile, string outputFile) {
 	model.write(outputFile);
 }
 
-int port_hl(string inputFile, string outputFile, bool force) {
+int port_hl(string inputFile, string outputFile, bool force, bool noanim) {
 	Model model(inputFile);
 	model.validate();
-	
-	if (!model.port_to_hl(force)) {
+
+	int ret = model.port_to_hl(force, noanim);
+
+	if (ret == 2) { // no port needed
+		return 2;
+	}
+	if (ret == 0) { // fail
 		return 1;
 	}
 	
@@ -146,6 +151,7 @@ int main(int argc, char* argv[])
 	int cropWidth = 0;
 	int cropHeight = 0;
 	bool force = false;
+	bool noanim = false;
 
 	bool expectPaletteFile = false;
 	for (int i = 0; i < argc; i++)
@@ -202,6 +208,9 @@ int main(int argc, char* argv[])
 			if (command == "porthl") {
 				if (arg == "-f") {
 					force = true;
+				}
+				if (arg == "-noanim") {
+					noanim = true;
 				}
 			}
 		}
@@ -327,7 +336,7 @@ int main(int argc, char* argv[])
 			cout << "ERROR: No output file specified\n";
 			return 1;
 		}
-		return port_hl(inputFile, outputFile, force);
+		return port_hl(inputFile, outputFile, force, noanim);
 	}
 	else if (command == "optimize") {
 		if (inputFile.size() == 0) {
