@@ -10,6 +10,7 @@
 #include <algorithm>
 #include "colors.h"
 #include <unordered_map>
+#include "MdlRenderer.h"
 
 #ifdef _MSC_VER 
 #define strncasecmp _strnicmp
@@ -17,6 +18,12 @@
 #endif
 
 using json::JSON;
+
+// round up to 4 byte offset for data insertion
+#define ALIGN_UP(offset) ((offset + 3) & ~3)
+
+void AngleQuaternion(const vec3& angles, vec4& quaternion);
+void VectorRotate(const vec3& in1, float in2[3][4], vec3& out);
 
 Model::Model(string fpath)
 {
@@ -267,13 +274,313 @@ bool Model::hasRemappableTextures() {
 	return false;
 }
 
-void Model::insertData(void* src, size_t bytes) {
-	if (bytes & 3) {
+mstudiobodyparts_t* Model::get_body(int bodyIdx) {
+	data.seek(header->bodypartindex + bodyIdx * sizeof(mstudiobodyparts_t));
+	return (mstudiobodyparts_t*)data.get();
+}
+
+mstudiomodel_t* Model::get_model(int bodyIdx, int modelIdx) {
+	mstudiobodyparts_t* body = get_body(bodyIdx);
+	data.seek(body->modelindex + modelIdx * sizeof(mstudiomodel_t));
+	return (mstudiomodel_t*)data.get();
+}
+
+mstudiomesh_t* Model::get_mesh(int bodyIdx, int modelIdx, int meshIdx) {
+	mstudiomodel_t* model = get_model(bodyIdx, modelIdx);
+	data.seek(model->meshindex + meshIdx * sizeof(mstudiomesh_t));
+	return (mstudiomesh_t*)data.get();
+}
+
+mstudiotexture_t* Model::get_texture(int idx) {
+	data.seek(header->textureindex + idx * sizeof(mstudiotexture_t));
+	return (mstudiotexture_t*)data.get();
+}
+
+mstudioseqdesc_t* Model::get_sequence(int idx) {
+	data.seek(header->seqindex + idx * sizeof(mstudioseqdesc_t));
+	return (mstudioseqdesc_t*)data.get();
+}
+
+bool Model::addSubmodel(Model& otherModel) {
+	if (header->numskinfamilies > 1 || otherModel.header->numskinfamilies > 1) {
+		printf("Props with alternate skins not supported\n");
+		return false;
+	}
+	if (header->numbodyparts > 1 || otherModel.header->numbodyparts > 1) {
+		printf("Props with mutliple body parts not supported\n");
+		return false;
+	}
+	if (header->numbones > 1 || otherModel.header->numbones > 1) {
+		printf("Props with mutliple bones not supported\n");
+		return false;
+	}
+
+	transformForZeroedRootBone();
+	otherModel.transformForZeroedRootBone();
+
+	printf("Append %s as submodel %d\n", otherModel.fpath.c_str(), get_body(0)->nummodels, fpath.c_str());
+
+	int textureOffset = header->numtextures;
+	addTextures(otherModel);
+
+	// append new model header
+	mstudiobodyparts_t* bod = get_body(0);
+	mstudiobodyparts_t* otherBod = otherModel.get_body(0);
+	int newModelIdx = bod->nummodels;
+
+	int insertInfoOffset = bod->modelindex + bod->nummodels * sizeof(mstudiomodel_t);
+	data.seek(insertInfoOffset);
+	otherModel.data.seek(otherBod->modelindex);
+	insertData(otherModel.data.get(), sizeof(mstudiomodel_t));
+	updateIndexes(insertInfoOffset, sizeof(mstudiomodel_t));
+
+	mstudiomodel_t* insertModel = otherModel.get_model(0, 0);
+	memcpy(get_model(0, newModelIdx), get_model(0, 0), sizeof(mstudiomodel_t)); // for validation at each copy step
+	get_body(0)->nummodels += 1;
+
+	int insertOffset = getSubmodelAppendOffset(0, newModelIdx - 1);
+
+	// add vert bone refs
+	{
+		otherModel.data.seek(insertModel->vertinfoindex);
+		data.seek(insertOffset);
+		int insertSz = insertData(otherModel.data.get(), insertModel->numverts * sizeof(uint8_t), true);
+		get_model(0, newModelIdx)->vertinfoindex = insertOffset;
+		get_model(0, newModelIdx)->numverts = insertModel->numverts;
+		insertOffset += insertSz;
+	}
+
+	// add norm bone refs
+	{
+		otherModel.data.seek(insertModel->norminfoindex);
+		data.seek(insertOffset);
+		int insertSz = insertData(otherModel.data.get(), insertModel->numnorms * sizeof(uint8_t), true);
+		get_model(0, newModelIdx)->norminfoindex = insertOffset;
+		get_model(0, newModelIdx)->numnorms = insertModel->numnorms;
+		insertOffset += insertSz;
+	}
+
+	// add verts
+	{
+		otherModel.data.seek(insertModel->vertindex);
+		data.seek(insertOffset);
+		int insertSz = insertData(otherModel.data.get(), insertModel->numverts * sizeof(vec3), true);
+		get_model(0, newModelIdx)->vertindex = insertOffset;
+		insertOffset += insertSz;
+	}
+
+	// add normals
+	{
+		otherModel.data.seek(insertModel->normindex);
+		data.seek(insertOffset);
+		int insertSz = insertData(otherModel.data.get(), insertModel->numnorms * sizeof(vec3), true);
+		get_model(0, newModelIdx)->normindex = insertOffset;
+		insertOffset += insertSz;
+	}
+
+	// insert mesh headers
+	{
+		otherModel.data.seek(insertModel->meshindex);
+		data.seek(insertOffset);
+		int insertSz = insertData(otherModel.data.get(), insertModel->nummesh * sizeof(mstudiomesh_t), true);
+		get_model(0, newModelIdx)->meshindex = insertOffset;
+		get_model(0, newModelIdx)->nummesh = insertModel->nummesh;
+		insertOffset += insertSz;
+	}
+
+	// insert mesh triangles
+	for (int i = 0; i < insertModel->nummesh; i++) {
+		mstudiomesh_t* otherMesh = otherModel.get_mesh(0, 0, i);
+		int triSz = otherModel.getMeshTriSize(0, 0, i);
+
+		otherModel.data.seek(otherMesh->triindex);
+		data.seek(insertOffset);
+		int insertSz = insertData(otherModel.data.get(), triSz, true);
+		get_mesh(0, newModelIdx, i)->triindex = insertOffset;
+		insertOffset += insertSz;
+	}
+
+	// offset texture references in new meshes
+	mstudiomodel_t* newModel = get_model(0, newModelIdx);
+	for (int i = 0; i < newModel->nummesh; i++) {
+		mstudiomesh_t* mesh = get_mesh(0, newModelIdx, i);
+		mesh->skinref += textureOffset;
+	}
+
+	// assign all verts to the root bone, in case the other model had more than one bone
+	data.seek(newModel->vertinfoindex);
+	memset(data.get(), 0, newModel->numverts*sizeof(uint8_t));
+	data.seek(newModel->norminfoindex);
+	memset(data.get(), 0, newModel->numnorms * sizeof(uint8_t));
+
+	//printModelDataOrder();
+	return validate();
+}
+
+void Model::transformForZeroedRootBone() {
+	data.seek(header->boneindex);
+	mstudiobone_t* bone = (mstudiobone_t*)data.get();
+
+	mstudioseqdesc_t* seq = get_sequence(0);
+	mstudioanim_t* panim = getAnimFrames(0);
+
+	if (seq->numblends > 1) {
+		printf("ERROR: Zeroing a model with blends not supported.\n");
+		return;
+	}
+	if (header->numbones > 1) {
+		printf("ERROR: Zeroing a model with more than one bone not supported.\n");
+		return;
+	}
+
+	float idlevalue[6];
+	memcpy(idlevalue, bone->value, sizeof(float) * 6);
+
+	for (int j = 0; j < 6; j++) {
+		if (panim->offset[j] == 0) {
+			continue; // no data
+		}
+
+		mstudioanimvalue_t* pvaluehdr = (mstudioanimvalue_t*)((uint8_t*)panim + panim->offset[j]);
+
+		int frameCount = 0;
+		do {
+			for (int k = 0; k < pvaluehdr->num.total && frameCount < seq->numframes; k++) {
+				int valIdx = min(k, (int)pvaluehdr->num.valid);
+				short& val = *((short*)pvaluehdr + 1 + valIdx);
+				idlevalue[j] = bone->value[j] + val * bone->scale[j];
+				val = 0; // zero animation values so verts are displayed without transforms
+				frameCount++;
+			}
+
+			pvaluehdr += pvaluehdr->num.valid + 1; // 1 = skip the header too
+		} while (frameCount < seq->numframes);
+	}
+
+	vec3 pos = vec3(idlevalue[0], idlevalue[1], idlevalue[2]);
+	vec3 rot = vec3(idlevalue[3], idlevalue[4], idlevalue[5]);
+	vec4 quat;
+
+	float bonematrix[3][4];
+	float invertedmatrix[3][4];
+	AngleQuaternion(rot, quat);
+	MdlRenderer::QuaternionMatrix((float*)&quat, bonematrix);
+	bonematrix[0][3] = pos.x;
+	bonematrix[1][3] = pos.y;
+	bonematrix[2][3] = pos.z;
+
+	for (int i = 0; i < header->numbodyparts; i++) {
+		mstudiobodyparts_t* body = get_body(i);
+
+		for (int k = 0; k < body->nummodels; k++) {
+			mstudiomodel_t* model = get_model(i, k);
+
+			data.seek(model->vertindex);
+			vec3* verts = (vec3*)data.get();
+
+			for (int j = 0; j < model->numverts; j++) {
+				vec3 newVert;
+				VectorRotate(verts[j], bonematrix, newVert);
+				verts[j] = newVert + pos;
+			}
+
+			data.seek(model->normindex);
+			vec3* norms = (vec3*)data.get();
+
+			for (int j = 0; j < model->numnorms; j++) {
+				vec3 newNorm;
+				VectorRotate(norms[j], bonematrix, newNorm);
+				norms[j] = newNorm;
+			}
+		}
+	}
+
+	// zero default bone values too
+	memset(bone->value, 0, sizeof(float)*6);
+	memset(bone->scale, 0, sizeof(float)*6);
+}
+
+int Model::getMeshTriSize(int bodyIdx, int modelIdx, int meshIdx) {
+	mstudiomesh_t* mesh = get_mesh(bodyIdx, modelIdx, meshIdx);
+
+	data.seek(mesh->triindex);
+	short* ptricmds = (short*)data.get();
+	short* ptricmds_start = ptricmds;
+	int p = 0;
+
+	while (p = *(ptricmds++)) {
+		if (p < 0) p = -p;
+		for (; p > 0; p--, ptricmds += 4);
+	}
+
+	return (uint8_t*)ptricmds - (uint8_t*)ptricmds_start;
+}
+
+int Model::getSubmodelAppendOffset(int bodypart, int model) {
+	data.seek(header->bodypartindex + bodypart * sizeof(mstudiobodyparts_t));
+	mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
+
+	data.seek(bod->modelindex + model * sizeof(mstudiomodel_t));
+	mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
+	int sz = 0;
+
+	int highestTriIndex = 0;
+	int highestTriIndexSz = 0;
+
+	for (int j = 0; j < mod->nummesh; j++) {
+		data.seek(mod->meshindex + j * sizeof(mstudiomesh_t));
+		mstudiomesh_t* mesh = (mstudiomesh_t*)data.get();
+		sz += sizeof(mstudiomesh_t);
+
+		data.seek(mesh->triindex);
+		short* ptricmds = (short*)data.get();
+		short* ptricmds_start = ptricmds;
+		int p = 0;
+
+		while (p = *(ptricmds++)) {
+			if (p < 0) p = -p;
+			for (; p > 0; p--, ptricmds += 4);
+		}
+
+		if (mesh->triindex > highestTriIndex) {
+			highestTriIndex = mesh->triindex;
+			highestTriIndexSz = (uint8_t*)ptricmds - (uint8_t*)ptricmds_start;
+		}
+	}
+
+	return ALIGN_UP(highestTriIndex + highestTriIndexSz);
+}
+
+int Model::insertData(void* src, size_t bytes, bool alignAndUpdate) {
+	int offset = data.tell();
+	
+	if (!alignAndUpdate && (bytes & 3)) {
 		printf("WARNING: Inserted unaligned data length\n");
+	}
+
+	if (!alignAndUpdate && (offset & 3)) {
+		printf("WARNING: Insert at unaligned offset\n");
 	}
 
 	data.insert(src, bytes);
 	header = (studiohdr_t*)data.getBuffer();
+
+	if (alignAndUpdate) {
+		static char nulldata[4];
+
+		int alignBytes = ALIGN_UP(bytes) - bytes;
+		if (alignBytes) {
+			data.insert(nulldata, alignBytes);
+			header = (studiohdr_t*)data.getBuffer();
+		}
+
+		bytes += alignBytes;
+
+		if (bytes)
+			updateIndexes(offset, bytes);
+	}
+
+	return bytes;
 }
 
 void Model::removeData(size_t bytes) {
@@ -283,6 +590,65 @@ void Model::removeData(size_t bytes) {
 
 	data.remove(bytes);
 	header = (studiohdr_t*)data.getBuffer();
+}
+
+void Model::addTextures(Model& tmodel) {
+	int numNewSkins = tmodel.header->numtextures;
+	int thisTexCount = header->numtextures;
+
+	// recalculate indexes in the texture infos
+	for (int i = 0; i < numNewSkins; i++) {
+		int texinfoOffset = header->textureindex + (thisTexCount + i) * sizeof(mstudiotexture_t);
+		data.seek(texinfoOffset);
+		tmodel.data.seek(tmodel.header->textureindex + i * sizeof(mstudiotexture_t));
+		insertData(tmodel.data.get(), sizeof(mstudiotexture_t));
+		updateIndexes(texinfoOffset, sizeof(mstudiotexture_t));
+
+		data.seek(texinfoOffset);
+		mstudiotexture_t* thisTinfo = (mstudiotexture_t*)data.get();
+		mstudiotexture_t* otherTinfo = (mstudiotexture_t*)tmodel.data.get();
+
+		data.seek(0, SEEK_END);
+
+		int texSize = otherTinfo->width * otherTinfo->height + 256*3;
+		thisTinfo->index = data.tell();
+		tmodel.data.seek(otherTinfo->index);
+		insertData(tmodel.data.get(), texSize);
+
+		data.seek(texinfoOffset);
+		thisTinfo = (mstudiotexture_t*)data.get();
+
+		header->numtextures++;
+		printf("Appended texture %s\n", get_texture(thisTexCount + i)->name);
+	}
+	
+	short* newSkinRefs = new short[numNewSkins];
+	for (int i = 0; i < numNewSkins; i++) {
+		newSkinRefs[i] = thisTexCount + i;
+	}
+
+	int insertSz = numNewSkins * sizeof(short);
+	int insertOffset = header->skinindex + header->numskinref * sizeof(short);
+	data.seek(insertOffset);
+	insertData(newSkinRefs, insertSz, true);
+	int insertEnd = data.tell();
+	header->numskinref += numNewSkins;
+	delete[] newSkinRefs;
+
+	header->length = data.size();
+
+	// delete extra alignment bytes. Assumes texture data follows skinref data
+	int gap = get_texture(0)->index - (insertOffset + insertSz);
+	if (gap >= 8) {
+		printf("WARNING: Expectedly large gap between skin and texture data: %d\n", gap);
+	}
+	if (gap >= 4) {
+		int deleteBytes = (gap / 4) * 4;
+		int removeAt = insertOffset + insertSz;
+		data.seek(removeAt);
+		removeData(deleteBytes);
+		updateIndexes(removeAt, -deleteBytes);
+	}
 }
 
 bool Model::mergeExternalTextures(bool deleteSource) {
@@ -361,7 +727,7 @@ bool Model::mergeExternalTextures(bool deleteSource) {
 #define MOVE_INDEX(val, afterIdx, delta) { \
 	if (val >= afterIdx) { \
 		val += delta; \
-		/*cout << "Updated: " << #val << endl;*/ \
+		/*printf("Updated: %s %d -> %d\n", #val, (int)(val-delta), (int)val);*/ \
 	} \
 }
 
@@ -533,12 +899,14 @@ void Model::printModelDataOrder() {
 				// normals are stored in model array and referenced from triangle data
 				//chunks.push_back({ meshname + "normals", mesh->normindex, mesh->numnorms * (int)sizeof(vec3) });
 
+				data.seek(0, SEEK_END);
+				size_t maxOffset = data.tell();
 				data.seek(mesh->triindex);
 				short* ptricmds = (short*)data.get();
 				short* ptricmds_start = ptricmds;
 				int p = 0;
 
-				while (p = *(ptricmds++)) {
+				while ((size_t)((char*)ptricmds - data.getBuffer()) < maxOffset && (p = *(ptricmds++))) {
 					if (p < 0) p = -p;
 					for (; p > 0; p--, ptricmds += 4);
 				}

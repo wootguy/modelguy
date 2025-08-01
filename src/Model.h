@@ -28,10 +28,34 @@ public:
 	// textures affected by topcolor/bottomcolor
 	bool hasRemappableTextures();
 
+	mstudiobodyparts_t* get_body(int bodyIdx);
+
+	mstudiomodel_t* get_model(int bodyIdx, int modelIdx);
+
+	mstudiomesh_t* get_mesh(int bodyIdx, int modelIdx, int meshIdx);
+
+	mstudiotexture_t* get_texture(int idx);
+
+	mstudioseqdesc_t* get_sequence(int idx);
+
+	// bytes for mesh triangle commands
+	int getMeshTriSize(int bodyIdx, int modelIdx, int meshIdx);
+
+	// merge other model into this one as a submodel
+	bool addSubmodel(Model& otherModel);
+
+	// move/rotate the model so that it displays correctly when the root bone has 0,0,0 rotation and position
+	void transformForZeroedRootBone();
+
+	// insertOffset = account for padding
+	int getSubmodelAppendOffset(int bodypart, int model);
+
 	// model has no triangles?
 	bool isEmpty();
 
 	bool mergeExternalTextures(bool deleteSource);
+
+	void addTextures(Model& otherModel);
 
 	bool mergeExternalSequences(bool deleteSource);
 
@@ -86,7 +110,9 @@ public:
 private:
 	string fpath;
 
-	void insertData(void * src, size_t bytes);
+	// align = add alignment bytes if inserted data length is unaligned, and update indexes
+	// returns bytes inserted
+	int insertData(void * src, size_t bytes, bool alignAndUpdate=false);
 
 	void removeData(size_t bytes);
 

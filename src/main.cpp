@@ -26,6 +26,32 @@ int merge_model(string inputFile, string outputFile) {
 	return 0;
 }
 
+int merge_prop(string mainModel, string subModel, string outputmodel) {
+	Model model(mainModel);
+
+	if (!model.validate())
+		return 1;
+
+	Model submodel(subModel);
+	if (!submodel.validate())
+		return 1;
+
+	if (model.hasExternalTextures()) {
+		model.mergeExternalSequences(true);
+	}
+	if (submodel.hasExternalTextures()) {
+		model.mergeExternalTextures(false);
+	}
+
+	if (!model.addSubmodel(submodel)) {
+		return 1;
+	}
+
+	model.write(outputmodel);
+
+	return 0;
+}
+
 int crop_texture(string inputFile, string outputFile, string texName, int width, int height) {
 	Model model(inputFile);
 
@@ -148,6 +174,7 @@ int main(int argc, char* argv[])
 	string command;
 	string texName;
 	string newTexName;
+	string submodelFile;
 	int cropWidth = 0;
 	int cropHeight = 0;
 	bool force = false;
@@ -169,6 +196,8 @@ int main(int argc, char* argv[])
 			if (larg.find(".mdl") != string::npos) {
 				if (inputFile.size() == 0)
 					inputFile = arg;
+				else if (command == "mergeprop" && submodelFile.empty())
+					submodelFile = arg;
 				else
 					outputFile = arg;
 			}
@@ -222,19 +251,20 @@ int main(int argc, char* argv[])
 			"Usage: modelguy <command> <parameters> <input.mdl> [output.mdl]\n"
 
 			"\n<Commands>\n"
-			"  merge  : Merges external texture and sequence models into the output model.\n"
-			"           If no output file is specified, the external models will also be deleted.\n"
-			"  crop   : Crops a texture to the specified dimensions. Takes <width>x<height> as parameters.\n"
-			"  resize : Resizes a texture to the specified dimensions. Takes <width>x<height> as parameters.\n"
-			"  rename : Renames a texture. Takes <old name> <new name> as parameters.\n"
-			"  info   : Write model info to a JSON file. Takes <input.mdl> <output.json> as parameters.\n"
-			"  wavify : Apply .wav extension to all events. Takes <input.mdl> <output.json> as parameters\.n\n"
-			"  porthl : Port a Sven Co-op player model to Half-Life. Takes <input.mdl> and <output.mdl> as parameters.\n"
-			"  type   : Identify player model type. The return code is unique per mod.\n"
-			"  view   : View the model in 3D.\n"
-			"  image  : Saves a PNG image of the model. Takes <width>x<height> and <output.png> as parameters.\n"
-			"  layout : Show data layout for the MDL file.\n"
-			"  optimize : deduplicate data.\n\n"
+			"  merge     : Merges external texture and sequence models into the output model.\n"
+			"              If no output file is specified, the external models will also be deleted.\n"
+			"  mergeprop : another one model into another as a body part. Used for prop models.\n"
+			"  crop      : Crops a texture to the specified dimensions. Takes <width>x<height> as parameters.\n"
+			"  resize    : Resizes a texture to the specified dimensions. Takes <width>x<height> as parameters.\n"
+			"  rename    : Renames a texture. Takes <old name> <new name> as parameters.\n"
+			"  info      : Write model info to a JSON file. Takes <input.mdl> <output.json> as parameters.\n"
+			"  wavify    : Apply .wav extension to all events. Takes <input.mdl> <output.json> as parameters\.n\n"
+			"  porthl    : Port a Sven Co-op player model to Half-Life. Takes <input.mdl> and <output.mdl> as parameters.\n"
+			"  type      : Identify player model type. The return code is unique per mod.\n"
+			"  view      : View the model in 3D.\n"
+			"  image     : Saves a PNG image of the model. Takes <width>x<height> and <output.png> as parameters.\n"
+			"  layout    : Show data layout for the MDL file.\n"
+			"  optimize  : deduplicate data.\n\n"
 
 			"\nExamples:\n"
 			"  modelguy merge barney.mdl\n"
@@ -267,6 +297,9 @@ int main(int argc, char* argv[])
 
 	if (command == "merge") {
 		return merge_model(inputFile, outputFile);
+	}
+	if (command == "mergeprop") {
+		return merge_prop(inputFile, submodelFile, outputFile);
 	}
 	else if (command == "crop") {
 		if (texName.size() == 0) {

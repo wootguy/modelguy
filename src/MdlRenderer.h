@@ -99,6 +99,14 @@ public:
 
 	void loadData();
 
+	// functions copied from Solokiller's model viewer
+	void CalcBones(vec3* pos, vec4* q, const mstudioseqdesc_t* const pseqdesc, const mstudioanim_t* panim, const float f, bool isGait);
+	void CalcBoneQuaternion(const int frame, const float s, const mstudiobone_t* const pbone, const mstudioanim_t* const panim, vec4& q);
+	void CalcBonePosition(const int frame, const float s, const mstudiobone_t* const pbone, const mstudioanim_t* const panim, float* pos);
+	void CalcBoneAdj();
+	void SlerpBones(vec4* q1, vec3* pos1, vec4* q2, vec3* pos2, float s);
+	static void QuaternionMatrix(float* quaternion, float matrix[3][4]);
+
 private:
 	string fpath;
 	bool legacy_mode;
@@ -159,11 +167,4 @@ private:
 
 	mstudioanim_t* GetAnim(mstudioseqdesc_t* pseqdesc);
 	mstudioseqdesc_t* getSequence(int seq);
-
-	// functions copied from Solokiller's model viewer
-	void CalcBones(vec3* pos, vec4* q, const mstudioseqdesc_t* const pseqdesc, const mstudioanim_t* panim, const float f, bool isGait);
-	void CalcBoneQuaternion(const int frame, const float s, const mstudiobone_t* const pbone, const mstudioanim_t* const panim, vec4& q);
-	void CalcBonePosition(const int frame, const float s, const mstudiobone_t* const pbone, const mstudioanim_t* const panim, float* pos);
-	void CalcBoneAdj();
-	void SlerpBones(vec4* q1, vec3* pos1, vec4* q2, vec3* pos2, float s);
-	void QuaternionMatrix(float* quaternion, float matrix[3][4]);};
+};
