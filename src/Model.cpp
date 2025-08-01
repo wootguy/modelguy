@@ -120,7 +120,7 @@ bool Model::validate() {
 			mstudioevent_t* evt = (mstudioevent_t*)data.get();
 		}
 
-		data.seek(seq->animindex + (seq->numblends * header->numbones * sizeof(mstudioanim_t) * 6) - 1);
+		data.seek(seq->animindex + (seq->numblends * header->numbones * sizeof(mstudioanim_t)) - 1);
 		if (data.eom()) {
 			cout << "ERROR: Failed to load bone data for sequence " + to_string(i) + "/" + to_string(header->numseq) + "\n";
 			return false;
@@ -413,7 +413,25 @@ bool Model::addSubmodel(Model& otherModel) {
 	data.seek(newModel->norminfoindex);
 	memset(data.get(), 0, newModel->numnorms * sizeof(uint8_t));
 
-	//printModelDataOrder();
+	// calculate bounding box for view culling
+	header->bbmin = vec3();
+	header->bbmax = vec3();
+	for (int i = 0; i < header->numbodyparts; i++) {
+		mstudiobodyparts_t* body = get_body(i);
+
+		for (int k = 0; k < body->nummodels; k++) {
+			mstudiomodel_t* model = get_model(i, k);
+
+			data.seek(model->vertindex);
+			vec3* verts = (vec3*)data.get();
+
+			for (int j = 0; j < model->numverts; j++) {
+				expandBoundingBox(verts[j], header->bbmin, header->bbmax);
+			}
+		}
+	}
+
+	printModelDataOrder();
 	return validate();
 }
 
@@ -434,27 +452,30 @@ void Model::transformForZeroedRootBone() {
 	}
 
 	float idlevalue[6];
-	memcpy(idlevalue, bone->value, sizeof(float) * 6);
+	memcpy(idlevalue, bone->value, sizeof(float)*6);
 
 	for (int j = 0; j < 6; j++) {
 		if (panim->offset[j] == 0) {
 			continue; // no data
 		}
 
-		mstudioanimvalue_t* pvaluehdr = (mstudioanimvalue_t*)((uint8_t*)panim + panim->offset[j]);
+		// only care about the first frame
+		mstudioanimvalue_t* pvaluehdr = (mstudioanimvalue_t*)((uint8_t*)panim + panim->offset[j]) + 1;
+		idlevalue[j] = bone->value[j] + pvaluehdr->value * bone->scale[j];
+	}
 
-		int frameCount = 0;
-		do {
-			for (int k = 0; k < pvaluehdr->num.total && frameCount < seq->numframes; k++) {
-				int valIdx = min(k, (int)pvaluehdr->num.valid);
-				short& val = *((short*)pvaluehdr + 1 + valIdx);
-				idlevalue[j] = bone->value[j] + val * bone->scale[j];
-				val = 0; // zero animation values so verts are displayed without transforms
-				frameCount++;
-			}
+	// zero default bone values
+	memset(bone->value, 0, sizeof(float) * 6);
+	memset(bone->scale, 0, sizeof(float) * 6);
 
-			pvaluehdr += pvaluehdr->num.valid + 1; // 1 = skip the header too
-		} while (frameCount < seq->numframes);
+	// delete the animation frame data
+	int animSz = get_animation_size(0) - sizeof(mstudioanim_t);
+	if (animSz > 0) {
+		memset(panim->offset, 0, sizeof(mstudioanim_t));
+		int framesOffset = ((char*)panim - data.getBuffer()) + sizeof(mstudioanim_t);
+		data.seek(framesOffset);
+		removeData(animSz);
+		updateIndexes(framesOffset, -animSz);
 	}
 
 	vec3 pos = vec3(idlevalue[0], idlevalue[1], idlevalue[2]);
@@ -494,10 +515,6 @@ void Model::transformForZeroedRootBone() {
 			}
 		}
 	}
-
-	// zero default bone values too
-	memset(bone->value, 0, sizeof(float)*6);
-	memset(bone->scale, 0, sizeof(float)*6);
 }
 
 int Model::getMeshTriSize(int bodyIdx, int modelIdx, int meshIdx) {
@@ -1219,8 +1236,8 @@ bool Model::resizeTexture(string texName, int newWidth, int newHeight) {
 		}
 		
 		string lowername = toLowerCase(name);
-		if (lowername.find("remap") == 0 || lowername.find("dm_base") == 0) {
-			// remappable textures must use the same palette exactly
+		if (lowername.find("remap") == 0 || lowername.find("dm_base") == 0 || (texture->flags & STUDIO_NF_MASKED)) {
+			// remappable and transparent textures must use the same palette exactly
 			float scalex = texture->width / (float)newWidth;
 			float scaley = texture->height / (float)newHeight;
 

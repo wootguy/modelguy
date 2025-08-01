@@ -37,10 +37,10 @@ int merge_prop(string mainModel, string subModel, string outputmodel) {
 		return 1;
 
 	if (model.hasExternalTextures()) {
-		model.mergeExternalSequences(true);
+		model.mergeExternalTextures(true);
 	}
 	if (submodel.hasExternalTextures()) {
-		model.mergeExternalTextures(false);
+		submodel.mergeExternalTextures(false);
 	}
 
 	if (!model.addSubmodel(submodel)) {
@@ -48,6 +48,23 @@ int merge_prop(string mainModel, string subModel, string outputmodel) {
 	}
 
 	model.write(outputmodel);
+
+	return 0;
+}
+
+int downscale_all(string inputFile, string outputModel, int maxPixels) {
+	Model model(inputFile);
+
+	if (!model.validate())
+		return 1;
+
+	if (model.hasExternalTextures()) {
+		model.mergeExternalSequences(true);
+	}
+
+	model.port_sc_textures_to_hl(maxPixels);
+
+	model.write(outputModel);
 
 	return 0;
 }
@@ -179,6 +196,7 @@ int main(int argc, char* argv[])
 	int cropHeight = 0;
 	bool force = false;
 	bool noanim = false;
+	int maxpixels = 512*512;
 
 	bool expectPaletteFile = false;
 	for (int i = 0; i < argc; i++)
@@ -216,6 +234,11 @@ int main(int argc, char* argv[])
 			if (command == "image") {
 				if (i == 4) {
 					outputFile = arg;
+				}
+			}
+			if (command == "downscale") {
+				if (i == 4) {
+					maxpixels = atoi(arg.c_str());
 				}
 			}
 			if (command == "rename") {
@@ -264,6 +287,7 @@ int main(int argc, char* argv[])
 			"  view      : View the model in 3D.\n"
 			"  image     : Saves a PNG image of the model. Takes <width>x<height> and <output.png> as parameters.\n"
 			"  layout    : Show data layout for the MDL file.\n"
+			"  downscale : Downscale all textures to the given max pixel count.\n"
 			"  optimize  : deduplicate data.\n\n"
 
 			"\nExamples:\n"
@@ -298,8 +322,11 @@ int main(int argc, char* argv[])
 	if (command == "merge") {
 		return merge_model(inputFile, outputFile);
 	}
-	if (command == "mergeprop") {
+	else if (command == "mergeprop") {
 		return merge_prop(inputFile, submodelFile, outputFile);
+	}
+	else if (command == "downscale") {
+		return downscale_all(inputFile, outputFile, maxpixels);
 	}
 	else if (command == "crop") {
 		if (texName.size() == 0) {

@@ -6,6 +6,72 @@
 #include <vector>
 #include "mstream.h"
 #include "ModelType.h"
+#include "colors.h"
+
+struct ModelAnimation {
+	mstudioseqdesc_t desc;
+	mstudioanim_t offsets; // file offset for frame data
+	vector<mstudioevent_t> events;
+	vector<mstudioanimvalue_t> frames[6]; // one set of frames for each coordinate type (x,y,z,rx,ry,rz)
+};
+
+struct ModelMesh {
+	mstudiomesh_t header;
+	vector<short> commands; // triangle commands
+};
+
+// for vertices and normals
+struct ModelVec3 {
+	vec3 pos;
+	uint8_t bone;
+};
+
+struct ModelSubModel {
+	mstudiomodel_t header;
+	vector<ModelVec3> verts;
+	vector<ModelVec3> normals;
+	vector<ModelMesh> meshes;
+};
+
+struct ModelBody {
+	mstudiobodyparts_t header;
+	vector<ModelSubModel> submodels;
+};
+
+struct ModelTexture {
+	mstudiotexture_t header;
+	vector<uint8_t> imageData;
+	vector<COLOR3> palette;
+};
+
+struct ModelSkinFamily {
+	vector<short> skinrefs; // remapped texture indexes (0,1,2,3... by default)
+};
+
+struct ModelData {
+	int					id;
+	int					version;
+	string name;
+	vec3				eyeposition;	// ideal eye position
+	vec3				min;			// ideal movement hull size
+	vec3				max;
+	vec3				bbmin;			// clipping bounding box
+	vec3				bbmax;
+	int					flags;
+	int					numskinref;			// replaceable textures
+	int					numskinfamilies;
+	int					skinindex;
+
+	vector<mstudiobone_t> bones;
+	vector<mstudiobbox_t> hitboxes;
+	vector<mstudioseqgroup_t> seqgroups;
+	vector<mstudioattachment_t> attachments;
+	vector<mstudiobonecontroller_t> boneControllers;
+	vector<ModelAnimation> animations;
+	vector<ModelBody> bodyparts;
+	vector<ModelTexture> textures;
+	vector<ModelSkinFamily> skinFamilies;
+};
 
 class Model {
 public:
