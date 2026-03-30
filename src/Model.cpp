@@ -600,6 +600,16 @@ int Model::insertData(void* src, size_t bytes, bool alignAndUpdate) {
 	return bytes;
 }
 
+int Model::reserveData(size_t bytes, bool alignAndUpdate) {
+	uint8_t* dummy = new uint8_t[bytes];
+	memset(dummy, 0, bytes);
+
+	int ret = insertData(dummy, bytes, alignAndUpdate);
+	
+	delete[] dummy;
+	return ret;
+}
+
 void Model::removeData(size_t bytes) {
 	if (bytes & 3) {
 		printf("WARNING: Removed unaligned data length\n");
@@ -820,6 +830,7 @@ void Model::printModelDataOrder() {
 		string name;
 		int offset;
 		int size;
+		int elementCount;
 		int numShares; // how many times this chunk is shared
 	};
 
@@ -839,15 +850,15 @@ void Model::printModelDataOrder() {
 	vector<DataChunk> chunks;
 
 	// skeleton
-	chunks.push_back({ ET_NONE, GT_NONE, "header", 0, sizeof(studiohdr_t)});
-	chunks.push_back({ ET_NONE, GT_NONE, "bones", header->boneindex, header->numbones * (int)sizeof(mstudiobone_t)});
-	chunks.push_back({ ET_NONE, GT_NONE, "bone controllers", header->bonecontrollerindex, header->numbonecontrollers * (int)sizeof(mstudiobonecontroller_t) });
-	chunks.push_back({ ET_NONE, GT_NONE, "attachments", header->attachmentindex, header->numattachments * (int)sizeof(mstudioattachment_t) });
-	chunks.push_back({ ET_NONE, GT_NONE, "hitboxes", header->hitboxindex, header->numhitboxes * (int)sizeof(mstudiobbox_t) });
+	chunks.push_back({ ET_NONE, GT_NONE, "header", 0, sizeof(studiohdr_t), 1});
+	chunks.push_back({ ET_NONE, GT_NONE, "bones", header->boneindex, header->numbones * (int)sizeof(mstudiobone_t), header->numbones });
+	chunks.push_back({ ET_NONE, GT_NONE, "bone controllers", header->bonecontrollerindex, header->numbonecontrollers * (int)sizeof(mstudiobonecontroller_t), header->numbonecontrollers });
+	chunks.push_back({ ET_NONE, GT_NONE, "attachments", header->attachmentindex, header->numattachments * (int)sizeof(mstudioattachment_t), header->numattachments });
+	chunks.push_back({ ET_NONE, GT_NONE, "hitboxes", header->hitboxindex, header->numhitboxes * (int)sizeof(mstudiobbox_t), header->numhitboxes });
 	
 	// sequences
-	chunks.push_back({ ET_NONE, GT_ANIM, "sequence descriptions", header->seqindex, header->numseq * (int)sizeof(mstudioseqdesc_t) });
-	chunks.push_back({ ET_NONE, GT_ANIM, "sequence groups", header->seqgroupindex, header->numseqgroups * (int)sizeof(mstudioseqgroup_t) });
+	chunks.push_back({ ET_NONE, GT_ANIM, "sequence descriptions", header->seqindex, header->numseq * (int)sizeof(mstudioseqdesc_t), header->numseq });
+	chunks.push_back({ ET_NONE, GT_ANIM, "sequence groups", header->seqgroupindex, header->numseqgroups * (int)sizeof(mstudioseqgroup_t), header->numseqgroups });
 
 	// sequences
 	for (int k = 0; k < header->numseq; k++) {
@@ -855,13 +866,14 @@ void Model::printModelDataOrder() {
 		mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
 		string seqname = "sequence " + to_string(k) + " -> ";
 
-		chunks.push_back({ ET_EVT, GT_ANIM, seqname + "events", seq->eventindex, seq->numevents * (int)sizeof(mstudioevent_t)});
+		chunks.push_back({ ET_EVT, GT_ANIM, seqname + "events", seq->eventindex, seq->numevents * (int)sizeof(mstudioevent_t), seq->numevents });
 		
 		data.seek(header->seqgroupindex);
 		mstudioseqgroup_t* pseqgroup = (mstudioseqgroup_t*)data.get();
 		data.seek(pseqgroup->data + seq->animindex);
 		mstudioanim_t* panim = (mstudioanim_t*)data.get();
 		int animDataSz = 0;
+		int totalFrames = 0;
 
 		for (int b = 0; b < seq->numblends; b++) {
 			for (int i = 0; i < header->numbones; i++, panim++) {
@@ -881,32 +893,33 @@ void Model::printModelDataOrder() {
 						frameCount += pvaluehdr->num.total;
 						animDataSz += (pvaluehdr->num.valid + 1) * sizeof(mstudioanimvalue_t);
 					}
+					totalFrames += frameCount;
 				}
 			}
 		}
 		
-		chunks.push_back({ ET_ANIM, GT_ANIM, seqname + "frames", pseqgroup->data + seq->animindex, animDataSz });
-		chunks.push_back({ ET_NONE, GT_ANIM, seqname + "pivots", seq->pivotindex, seq->numpivots * (int)sizeof(mstudiopivot_t) });
+		chunks.push_back({ ET_ANIM, GT_ANIM, seqname + "frames", pseqgroup->data + seq->animindex, animDataSz, totalFrames });
+		chunks.push_back({ ET_NONE, GT_ANIM, seqname + "pivots", seq->pivotindex, seq->numpivots * (int)sizeof(mstudiopivot_t), seq->numpivots });
 		//chunks.push_back({ ET_NONE, GT_ANIM, seqname + "automove positions", seq->automoveposindex, 0 });
 		//chunks.push_back({ ET_NONE, GT_ANIM, seqname + "automove angles", seq->automoveangleindex, 0 });
 	}
 
 	// meshes
-	chunks.push_back({ ET_NONE, GT_MESH, "body part infos", header->bodypartindex, header->numbodyparts * (int)sizeof(mstudiobodyparts_t) });
+	chunks.push_back({ ET_NONE, GT_MESH, "body part infos", header->bodypartindex, header->numbodyparts * (int)sizeof(mstudiobodyparts_t), header->numbodyparts });
 
 	for (int i = 0; i < header->numbodyparts; i++) {
 		data.seek(header->bodypartindex + i * sizeof(mstudiobodyparts_t));
 		mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
 		string bodname = "body " + to_string(i) + " -> ";
 
-		chunks.push_back({ ET_NONE, GT_MESH, bodname + "model infos", bod->modelindex, bod->nummodels * (int)sizeof(mstudiomodel_t) });
+		chunks.push_back({ ET_NONE, GT_MESH, bodname + "model infos", bod->modelindex, bod->nummodels * (int)sizeof(mstudiomodel_t), bod->nummodels });
 
 		for (int k = 0; k < bod->nummodels; k++) {
 			data.seek(bod->modelindex + k * sizeof(mstudiomodel_t));
 			mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
 			string modname = bodname + "model " + to_string(k) + " -> ";
 
-			chunks.push_back({ ET_NONE, GT_MESH, modname + "mesh infos", mod->meshindex, mod->nummesh * (int)sizeof(mstudiomesh_t) });
+			chunks.push_back({ ET_NONE, GT_MESH, modname + "mesh infos", mod->meshindex, mod->nummesh * (int)sizeof(mstudiomesh_t), mod->nummesh });
 
 			for (int j = 0; j < mod->nummesh; j++) {
 				data.seek(mod->meshindex + j * sizeof(mstudiomesh_t));
@@ -922,35 +935,37 @@ void Model::printModelDataOrder() {
 				short* ptricmds = (short*)data.get();
 				short* ptricmds_start = ptricmds;
 				int p = 0;
+				int totalPolys = 0;
 
 				while ((size_t)((char*)ptricmds - data.getBuffer()) < maxOffset && (p = *(ptricmds++))) {
 					if (p < 0) p = -p;
+					totalPolys += p - 2;
 					for (; p > 0; p--, ptricmds += 4);
 				}
 				int triDataSz = (uint8_t*)ptricmds - (uint8_t*)ptricmds_start;
-				chunks.push_back({ ET_NONE, GT_MESH, meshname + "triangles", mesh->triindex, triDataSz });
+				chunks.push_back({ ET_NONE, GT_MESH, meshname + "triangles", mesh->triindex, triDataSz, totalPolys });
 			}
 
-			chunks.push_back({ ET_NONE, GT_MESH, modname + "normals", mod->normindex, mod->numnorms * (int)sizeof(vec3) });
-			chunks.push_back({ ET_NONE, GT_MESH, modname + "normal bone indices", mod->norminfoindex, mod->numnorms * (int)sizeof(uint8_t) });
-			chunks.push_back({ ET_NONE, GT_MESH, modname + "vertices", mod->vertindex, mod->numverts * (int)sizeof(vec3) });
-			chunks.push_back({ ET_NONE, GT_MESH, modname + "vertex bone indices", mod->vertinfoindex, mod->numverts * (int)sizeof(uint8_t) });
+			chunks.push_back({ ET_NONE, GT_MESH, modname + "normals", mod->normindex, mod->numnorms * (int)sizeof(vec3), mod->numnorms });
+			chunks.push_back({ ET_NONE, GT_MESH, modname + "normal bone indices", mod->norminfoindex, mod->numnorms * (int)sizeof(uint8_t), mod->numnorms });
+			chunks.push_back({ ET_NONE, GT_MESH, modname + "vertices", mod->vertindex, mod->numverts * (int)sizeof(vec3), mod->numverts });
+			chunks.push_back({ ET_NONE, GT_MESH, modname + "vertex bone indices", mod->vertinfoindex, mod->numverts * (int)sizeof(uint8_t), mod->numverts });
 		}
 	}
 
 	// textures
-	chunks.push_back({ ET_NONE, GT_TEX, "texture infos", header->textureindex, header->numtextures * (int)sizeof(mstudiotexture_t) });
+	chunks.push_back({ ET_NONE, GT_TEX, "texture infos", header->textureindex, header->numtextures * (int)sizeof(mstudiotexture_t), header->numtextures });
 
 	for (int i = 0; i < header->numtextures; i++) {
 		data.seek(header->textureindex + i * sizeof(mstudiotexture_t));
 		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
 
 		int texSize = texture->width * texture->height + 256 * 3;
-		chunks.push_back({ ET_NONE, GT_TEX, "texture " + to_string(i), texture->index, texSize});
+		chunks.push_back({ ET_NONE, GT_TEX, "texture " + to_string(i), texture->index, texSize, 1});
 	}
 
-	chunks.push_back({ ET_NONE, GT_TEX, "skins", header->skinindex, header->numskinfamilies * header->numskinref * (int)sizeof(short) });
-	chunks.push_back({ ET_NONE, GT_TEX, "texture data index", header->texturedataindex, 0 });
+	chunks.push_back({ ET_NONE, GT_TEX, "skins", header->skinindex, header->numskinfamilies * header->numskinref * (int)sizeof(short), header->numskinref });
+	chunks.push_back({ ET_NONE, GT_TEX, "texture data index", header->texturedataindex, 0, 0 });
 
 	sort(chunks.begin(), chunks.end(), [](const DataChunk& a, const DataChunk& b) {
 		return a.offset < b.offset;
@@ -968,6 +983,7 @@ void Model::printModelDataOrder() {
 			if (chunks[i].offset == newChunks[k].offset && chunks[i].elementType == newChunks[k].elementType) {
 				newChunks[k].numShares++;
 				newChunks[k].size = max(newChunks[k].size, chunks[i].size);
+				newChunks[k].elementCount = max(newChunks[k].elementCount, chunks[i].elementCount);
 				isShared = true;
 				break;
 			}
@@ -1051,8 +1067,8 @@ void Model::printModelDataOrder() {
 
 		const char* unlaigned = (chunk.offset & 3) ? " (UNALIGNED)" : "";
 
-		printf("%7d (%6d bytes) : %s%s%s%s\n", chunk.offset,
-			chunk.size, chunk.name.c_str(), shares.c_str(), unlaigned, overlap.c_str());
+		printf("%7d (%6d bytes) : %s (%d)%s%s%s\n", chunk.offset,
+			chunk.size, chunk.name.c_str(), chunk.elementCount, shares.c_str(), unlaigned, overlap.c_str());
 	}
 	printf("\nTotal overlap bytes   : %d\n", totalOverlap);
 	printf("Total mystery bytes   : %d\n", totalGap);
@@ -1925,6 +1941,207 @@ int Model::port_sc_textures_to_hl(int maxPixels) {
 	return anyChanges ? 1 : 2;
 }
 
+bool Model::is_submodel_mixed_bright(int body, int submodel, vector<mstudiomesh_t>& fullbrightMeshes) {
+	data.seek(header->bodypartindex + body * sizeof(mstudiobodyparts_t));
+	mstudiobodyparts_t* bod = (mstudiobodyparts_t*)data.get();
+
+	int numMixedSubmodels = 0;
+
+	data.seek(bod->modelindex + submodel * sizeof(mstudiomodel_t));
+	mstudiomodel_t* mod = (mstudiomodel_t*)data.get();
+
+	bool hasFullBright = false;
+	bool hasNormalBright = false;
+
+	for (int k = 0; k < mod->nummesh; k++) {
+		data.seek(mod->meshindex + k * sizeof(mstudiomesh_t));
+		mstudiomesh_t* mesh = (mstudiomesh_t*)data.get();
+
+		data.seek(header->skinindex);
+		short* skins = (short*)data.get();
+		int texId = skins[mesh->skinref];
+
+		data.seek(header->textureindex + texId * sizeof(mstudiotexture_t));
+		mstudiotexture_t* texture = (mstudiotexture_t*)data.get();
+
+		if (texture->flags & STUDIO_NF_FULLBRIGHT) {
+			hasFullBright = true;
+			fullbrightMeshes.push_back(*mesh);
+		}
+		else {
+			hasNormalBright = true;
+		}
+	}
+
+	return hasFullBright && hasNormalBright;
+}
+
+bool Model::split_fullbright_meshes() {
+	int originalBodyPartCount = header->numbodyparts;
+	int numSplits = 0;
+
+	for (int b = 0; b < originalBodyPartCount; b++) {
+		mstudiobodyparts_t* bod = get_body(b);
+
+		int numMixedSubmodels = 0;
+		int numFullbrightMeshes = 0;
+		int numDupNorms = 0;
+		int numDupVerts = 0;
+
+		for (int m = 0; m < bod->nummodels; m++) {
+			vector<mstudiomesh_t> fullbrightMeshes;
+			if (is_submodel_mixed_bright(b, m, fullbrightMeshes)) {
+				numMixedSubmodels++;
+				numFullbrightMeshes += fullbrightMeshes.size();
+				mstudiomodel_t* mod = get_model(b, m);
+				numDupNorms += mod->numnorms;
+				numDupVerts += mod->numverts;
+			}
+		}
+
+		if (!numMixedSubmodels)
+			continue;
+
+		//
+		// add a new body part to hold the fullbright meshes
+		//
+		int newBodyIndex = header->bodypartindex + sizeof(mstudiobodyparts_t) * header->numbodyparts;
+		mstudiobodyparts_t brightBody;
+		memcpy(&brightBody, bod, sizeof(mstudiobodyparts_t));
+		brightBody.nummodels = 0;
+		strncat(brightBody.name, "_FB", sizeof(brightBody.name));
+
+		data.seek(newBodyIndex);
+		insertData(&brightBody, sizeof(mstudiobodyparts_t), true);
+		header->numbodyparts++;
+
+		// reserve space to simplify index calculations (everything is shifted after each insertion)
+		int insertOffset = header->textureindex;
+		data.seek(insertOffset);
+		int meshSz = numFullbrightMeshes * sizeof(mstudiomesh_t);
+		int dupBoneVertSz = ((numDupVerts + 3) / 4) * 4; // align
+		int dupBoneNormSz = ((numDupNorms + 3) / 4) * 4;
+		int dupNormSz = numDupNorms * sizeof(vec3);
+		int dupVertSz = numDupVerts * sizeof(vec3);
+		reserveData(meshSz + dupBoneVertSz + dupBoneNormSz + dupNormSz + dupVertSz, true);
+		
+		mstudiobodyparts_t* lastBody = get_body(header->numbodyparts - 2);
+		int submodelSz = numMixedSubmodels * sizeof(mstudiomodel_t);
+		int newModelsIndex = lastBody->modelindex + lastBody->nummodels * sizeof(mstudiomodel_t);
+		data.seek(newModelsIndex);
+		reserveData(submodelSz, true);
+
+		// update pointers
+		bod = get_body(b);
+		int newBoneVertIndex = insertOffset + submodelSz;
+		int newBoneNormIndex = newBoneVertIndex + dupBoneVertSz;
+		int newVertsIndex = newBoneNormIndex + dupBoneNormSz;
+		int newNormsIndex = newVertsIndex + dupVertSz;
+		int newMeshesIndex = newNormsIndex + dupNormSz;
+
+		// set new body indexes now that insertions are done, and indexes won't be shifted
+		mstudiobodyparts_t* newBod = get_body(header->numbodyparts - 1);
+		newBod->modelindex = newModelsIndex;
+		newBod->nummodels = numMixedSubmodels;
+
+		//
+		// Add new body submodels after all other body data
+		//
+		int meshCount = 0;
+		int boneVertCount = 0;
+		int boneNormCount = 0;
+		int vertsCount = 0;
+		int normsCount = 0;
+
+		for (int m = 0; m < bod->nummodels; m++) {
+			vector<mstudiomesh_t> fullbrightMeshes;
+			if (!is_submodel_mixed_bright(b, m, fullbrightMeshes)) {
+				continue;
+			}
+
+			mstudiomodel_t* mod = get_model(b, m);
+			int normSz = mod->numnorms * sizeof(vec3);
+			int vertsSz = mod->numverts * sizeof(vec3);
+
+			data.seek(newModelsIndex);
+			mstudiomodel_t* brightModel = (mstudiomodel_t*)data.get();
+			memcpy(brightModel, mod, sizeof(mstudiomodel_t));
+			brightModel->meshindex = newMeshesIndex + meshCount*sizeof(mstudiomesh_t);
+			brightModel->nummesh = fullbrightMeshes.size();
+			brightModel->normindex = newNormsIndex;
+			brightModel->vertindex = newVertsIndex;
+			brightModel->vertinfoindex = newBoneVertIndex;
+			brightModel->norminfoindex = newBoneNormIndex;
+			meshCount += fullbrightMeshes.size();
+			newModelsIndex += sizeof(mstudiomodel_t);
+
+			data.seek(newBoneVertIndex);
+			memcpy(data.get(), data.getBuffer() + mod->vertinfoindex, mod->numverts);
+			newBoneVertIndex += mod->numverts;
+
+			data.seek(newBoneNormIndex);
+			memcpy(data.get(), data.getBuffer() + mod->vertinfoindex, mod->numnorms);
+			newBoneNormIndex += mod->numnorms;
+
+			data.seek(newNormsIndex);
+			memcpy(data.get(), data.getBuffer() + mod->normindex, normSz);
+			newNormsIndex += normSz;
+
+			data.seek(newVertsIndex);
+			memcpy(data.get(), data.getBuffer() + mod->vertindex, vertsSz);
+			newVertsIndex += vertsSz;
+
+			data.seek(brightModel->meshindex);
+			memcpy(data.get(), &fullbrightMeshes[0], fullbrightMeshes.size()*sizeof(mstudiomesh_t));
+		}
+
+		//
+		// Remove fullbright meshes from the original body
+		//
+		for (int m = 0; m < bod->nummodels; m++) {
+			vector<mstudiomesh_t> fullbrightMeshes;
+			if (!is_submodel_mixed_bright(b, m, fullbrightMeshes)) {
+				continue;
+			}
+
+			mstudiomodel_t* mod = get_model(b, m);
+
+			for (int k = 0; k < mod->nummesh; k++) {
+				mstudiomesh_t* mesh = get_mesh(b, m, k);
+
+				data.seek(header->skinindex);
+				short* skins = (short*)data.get();
+				int texId = skins[mesh->skinref];
+
+				mstudiotexture_t* texture = get_texture(texId);
+
+				if (texture->flags & STUDIO_NF_FULLBRIGHT) {
+					mod->nummesh--;
+					int offset = mod->meshindex + k * sizeof(mstudiomesh_t);
+					data.seek(offset);
+					removeData(sizeof(mstudiomesh_t));
+					updateIndexes(offset, -sizeof(mstudiomesh_t));
+
+					// update pointers
+					bod = get_body(b);
+					newBod = get_body(header->numbodyparts-1);
+					mod = get_model(b, m);
+				}
+			}
+		}
+
+		numSplits++;
+		printf("Moved %d fullbright meshes in body %d '%s' to new body '%s'.\n",
+			numFullbrightMeshes, b, bod->name, newBod->name);
+
+		// TODO: this isn't enough. The vert/normal/info arrays also need to be regenerated
+		// or else the fullbright effect doesn't work and depends on your view direction strangely.
+		// Recompiling the model fixes this.
+	}
+
+	return numSplits > 0;
+}
+
 int Model::port_to_hl(bool forcePortFromSven, bool noanim) {
 	int modelType = get_model_type(false);
 	bool anyPortingDone = false;
@@ -1976,17 +2193,18 @@ int Model::port_to_hl(bool forcePortFromSven, bool noanim) {
 
 	int texEditResult = port_sc_textures_to_hl(0x40000);
 	int eventsEdited = wavify();
+	bool fullbrightSplit = split_fullbright_meshes();
 
 	if (eventsEdited) {
 		printf("Applied wav extension to %d audio events\n", eventsEdited);
 	}
 
-	//printModelDataOrder();
+	printModelDataOrder();
 	if (!validate() || texEditResult == 0) {
 		return 0;
 	}
 
-	if (texEditResult == 1 || eventsEdited != 0) {
+	if (texEditResult == 1 || eventsEdited != 0 || fullbrightSplit) {
 		anyPortingDone = true;
 	}
 

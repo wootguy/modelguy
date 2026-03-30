@@ -283,6 +283,7 @@ int main(int argc, char* argv[])
 			"  info      : Write model info to a JSON file. Takes <input.mdl> <output.json> as parameters.\n"
 			"  wavify    : Apply .wav extension to all events. Takes <input.mdl> <output.json> as parameters\.n\n"
 			"  porthl    : Port a Sven Co-op player model to Half-Life. Takes <input.mdl> and <output.mdl> as parameters.\n"
+			"              Add -noanim to skip animation porting, for generic models."
 			"  type      : Identify player model type. The return code is unique per mod.\n"
 			"  view      : View the model in 3D.\n"
 			"  image     : Saves a PNG image of the model. Takes <width>x<height> and <output.png> as parameters.\n"
@@ -295,6 +296,8 @@ int main(int argc, char* argv[])
 			"  modelguy crop face.bmp 100x80 hgrunt.mdl\n"
 			"  modelguy rename hev_arm.bmp Remap1_000_255_255.bmp v_shotgun.mdl\n"
 			"  modelguy image player.mdl 800x400 player.png\n"
+			"  modelguy porthl player.mdl player_v1sc.mdl\n"
+			"  modelguy porthl bucket.mdl bucket.mdl -noanim\n"
 			;
 			return 0;
 		}

@@ -154,6 +154,12 @@ public:
 	// returns: 0 = fail, 1 = success, 2 = no porting needed
 	int port_sc_textures_to_hl(int maxPixels);
 
+	// true if the submodel contains meshes that mix fullbright and non-fullbright textures
+	bool is_submodel_mixed_bright(int body, int submodel, vector<mstudiomesh_t>& fullbrightMeshes);
+
+	// moves fullbright meshes to new bodypart, if in a bodypart with mixed fullbright flags
+	bool split_fullbright_meshes();
+
 	// converts a sven co-op model for use in half-life
 	// noanim = don't adjust animation ordering
 	// returns: 0 = fail, 1 = success, 2 = no porting needed
@@ -179,6 +185,8 @@ private:
 	// align = add alignment bytes if inserted data length is unaligned, and update indexes
 	// returns bytes inserted
 	int insertData(void * src, size_t bytes, bool alignAndUpdate=false);
+
+	int reserveData(size_t bytes, bool alignAndUpdate = false);
 
 	void removeData(size_t bytes);
 
