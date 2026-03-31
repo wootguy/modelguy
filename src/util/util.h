@@ -1,6 +1,7 @@
 #pragma once
 #include "types.h"
 #include <string>
+#include <vector>
 
 #define PI 3.141592f
 #define EPSILON	(0.03125f) // 1/32 (to keep floating point happy -Carmack)
@@ -30,3 +31,5 @@ char* strcpy_safe(char* dest, const char* src, size_t size);
 uint64_t getFileModifiedTime(const std::string& path);
 
 string getFileName(const string& path);
+
+vector<string> getDirFiles(string path, string extension, string startswith, bool onlyOne);

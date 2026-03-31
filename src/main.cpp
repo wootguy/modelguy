@@ -6,6 +6,21 @@
 #include <algorithm>
 #include <iostream>
 
+#if defined(WIN32) || defined(_WIN32)
+#include <Windows.h>
+#include <direct.h>
+#define GetCurrentDir _getcwd
+#else
+#include <time.h>
+#include <unistd.h>
+#include <dirent.h>
+#define GetCurrentDir getcwd
+
+typedef char TCHAR;
+
+void OutputDebugString(const char* str) {}
+#endif
+
 int merge_model(string inputFile, string outputFile) {
 	Model model(inputFile);
 
@@ -133,18 +148,80 @@ void wavify(string inputFile, string outputFile) {
 
 int port_hl(string inputFile, string outputFile, bool force, bool noanim) {
 	Model model(inputFile);
-	model.validate();
+	if (!model.validate()) {
+		printf("Failed to port model: %s\n", inputFile.c_str());
+		return 1;
+	}
 
-	int ret = model.port_to_hl(force, noanim);
+	bool recompileNeeded = false;
+	int ret = model.port_to_hl(recompileNeeded, force, noanim);
 
 	if (ret == 2) { // no port needed
 		return 2;
 	}
 	if (ret == 0) { // fail
+		printf("Failed to port model: %s\n", inputFile.c_str());
 		return 1;
 	}
 	
 	model.write(outputFile);
+
+	if (recompileNeeded) {
+#ifdef WIN32
+		// lazy solution until meshes can be regenerated in this project
+		printf("Recompiling model to fix fullbright effects.\n");
+		string inpath = replaceString(outputFile, "/", "\\");
+		if (inpath.find_first_of("\\") == -1) {
+			inpath = ".\\" + inpath;
+		}
+		const string tmp_dir = "_studiodec_tmp";
+		string outpath = inpath.substr(0, inpath.find_last_of("\\") + 1) + tmp_dir;
+		string qc = replaceString(inpath.substr(inpath.find_last_of("\\") + 1), ".mdl", ".qc");
+
+		static char buffer[260];
+		string studiomdlPath = GetCurrentDir(buffer, 260) + string("\\studiomdl");
+
+		// decompile
+		string cmd = "studiodec \"" + inpath + "\"" + " \"" + outpath + "\"";
+		printf("%s\n", cmd.c_str());
+		system(cmd.c_str());
+
+		// compile
+		cmd = "cd " + outpath + " && \"" + studiomdlPath + "\" -i -k " + qc;
+		printf("%s\n", cmd.c_str());
+		system(cmd.c_str());
+
+		// replace file
+		vector<string> mdlFiles = getDirFiles(outpath + "\\", "mdl", "", false);
+		if (mdlFiles.size() > 1) {
+			printf("ERROR: Multiple MDL files in tmp folder! Don't know what to do. Aborting.");
+			return 1;
+		}
+		if (mdlFiles.size() == 0) {
+			printf("ERROR: Model recompile failed. Check that studiodec.exe and studiomdl.exe are in your working directory.\n");
+			printf("Use the studiomdl that comes with the Sven Co-op SDK (it includes UV shift fixes).\n");
+			return 1;
+		}
+		string newMdl = outpath + "\\" + mdlFiles[0];
+		remove(outputFile.c_str());
+
+		if (rename(newMdl.c_str(), outputFile.c_str()) == -1) {
+			printf("Recompilation failed. Rename error %d: %s\n", errno, newMdl.c_str());
+			return false;
+		}
+
+		// cleanup
+		cmd = "rmdir /s /q \"" + outpath + "\"";
+		printf("%s\n", cmd.c_str());
+		system(cmd.c_str());
+
+#else
+		printf("Oops! Linux can't do this yet. Recompile the model manually with Crowbar to fix the fullbright effects.\n")
+		printf("Recompile failed for: %s\n", outputFile.c_str());
+		return 1;
+#endif
+	}
+
 	return 0;
 }
 

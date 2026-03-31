@@ -1494,15 +1494,23 @@ void Model::dump_info(string outputPath) {
 			JSON jmodel = json::Object();
 			int polyCount = 0;
 
+			JSON jmeshes = json::Array();
+
 			for (int i = 0; i < mod->nummesh; i++) {
 				data.seek(mod->meshindex + i * sizeof(mstudiomesh_t));
 				mstudiomesh_t* mesh = (mstudiomesh_t*)data.get();
 				polyCount += mesh->numtris;
+
+				JSON jmesh = json::Object();
+				jmesh["texid"] = mesh->skinref;
+				jmesh["polys"] = mesh->numtris;
+				jmeshes.append(jmesh);
 			}
 
 			jmodel["name"] = sanitize_string(mod->name);
 			jmodel["polys"] = polyCount;
 			jmodel["verts"] = mod->numverts;
+			jmodel["meshes"] = jmeshes;
 			jmodels.append(jmodel);
 		}
 
@@ -2126,6 +2134,7 @@ bool Model::split_fullbright_meshes() {
 					bod = get_body(b);
 					newBod = get_body(header->numbodyparts-1);
 					mod = get_model(b, m);
+					k--;
 				}
 			}
 		}
@@ -2142,7 +2151,7 @@ bool Model::split_fullbright_meshes() {
 	return numSplits > 0;
 }
 
-int Model::port_to_hl(bool forcePortFromSven, bool noanim) {
+int Model::port_to_hl(bool& recompileNeeded, bool forcePortFromSven, bool noanim) {
 	int modelType = get_model_type(false);
 	bool anyPortingDone = false;
 
@@ -2181,7 +2190,7 @@ int Model::port_to_hl(bool forcePortFromSven, bool noanim) {
 			getline(cin, answer);  // reads entire line including spaces
 			if (answer.find("y") != string::npos) {
 				printf("Forcing port!\n");
-				return port_to_hl(true);
+				return port_to_hl(recompileNeeded, true);
 			}
 			else {
 				printf("Port aborted.\n");
@@ -2193,18 +2202,18 @@ int Model::port_to_hl(bool forcePortFromSven, bool noanim) {
 
 	int texEditResult = port_sc_textures_to_hl(0x40000);
 	int eventsEdited = wavify();
-	bool fullbrightSplit = split_fullbright_meshes();
+	recompileNeeded = split_fullbright_meshes();
 
+	//printModelDataOrder();
 	if (eventsEdited) {
 		printf("Applied wav extension to %d audio events\n", eventsEdited);
 	}
 
-	printModelDataOrder();
 	if (!validate() || texEditResult == 0) {
 		return 0;
 	}
 
-	if (texEditResult == 1 || eventsEdited != 0 || fullbrightSplit) {
+	if (texEditResult == 1 || eventsEdited != 0 || recompileNeeded) {
 		anyPortingDone = true;
 	}
 

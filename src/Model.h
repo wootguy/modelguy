@@ -163,7 +163,7 @@ public:
 	// converts a sven co-op model for use in half-life
 	// noanim = don't adjust animation ordering
 	// returns: 0 = fail, 1 = success, 2 = no porting needed
-	int port_to_hl(bool forcePortFromSven=false, bool noanim=false);
+	int port_to_hl(bool& recompileNeeded, bool forcePortFromSven=false, bool noanim=false);
 
 	// figure out which mod this player model was made for
 	int get_model_type(bool printResult=false);
