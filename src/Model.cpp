@@ -1890,6 +1890,16 @@ int Model::port_sc_textures_to_hl(int maxPixels) {
 		int newWidth = ((int)(texture->width * scale + 3) / 4) * 4;
 		int newHeight = ((int)(texture->height * scale + 3) / 4) * 4;
 
+		// handle edge cases
+		while (newWidth * newHeight > maxPixels) {
+			if (newWidth > newHeight) {
+				newWidth -= 4;
+			}
+			else {
+				newHeight -= 4;
+			}
+		}
+
 		if (!resizeTexture(texture->name, newWidth, newHeight)) {
 			anyFailed = true;
 		}
