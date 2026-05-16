@@ -301,6 +301,11 @@ mstudioseqdesc_t* Model::get_sequence(int idx) {
 	return (mstudioseqdesc_t*)data.get();
 }
 
+mstudioattachment_t* Model::get_attachment(int idx) {
+	data.seek(header->attachmentindex + idx * sizeof(mstudioattachment_t));
+	return (mstudioattachment_t*)data.get();
+}
+
 bool Model::addSubmodel(Model& otherModel) {
 	if (header->numskinfamilies > 1 || otherModel.header->numskinfamilies > 1) {
 		printf("Props with alternate skins not supported\n");
@@ -431,6 +436,19 @@ bool Model::addSubmodel(Model& otherModel) {
 		}
 	}
 
+	// append attachments
+	if (otherModel.header->numattachments) {
+		int thisAttachOffset = header->attachmentindex;
+		if (!header->numattachments)
+			thisAttachOffset = header->boneindex + header->numbones * sizeof(mstudiobone_t);
+
+		otherModel.data.seek(otherModel.header->attachmentindex);
+		data.seek(thisAttachOffset + header->numattachments*sizeof(mstudioattachment_t));
+		insertData(otherModel.data.get(), otherModel.header->numattachments * sizeof(mstudioattachment_t), true);
+		header->numattachments += otherModel.header->numattachments;
+		header->attachmentindex = thisAttachOffset;
+	}
+
 	printModelDataOrder();
 	return validate();
 }
@@ -514,6 +532,14 @@ void Model::transformForZeroedRootBone() {
 				norms[j] = newNorm;
 			}
 		}
+	}
+
+	for (int i = 0; i < header->numattachments; i++) {
+		mstudioattachment_t* attach = get_attachment(i);
+
+		vec3 newVec;
+		VectorRotate(attach->org, bonematrix, newVec);
+		attach->org = newVec;
 	}
 }
 

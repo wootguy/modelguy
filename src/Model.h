@@ -104,6 +104,8 @@ public:
 
 	mstudioseqdesc_t* get_sequence(int idx);
 
+	mstudioattachment_t* get_attachment(int idx);
+
 	// bytes for mesh triangle commands
 	int getMeshTriSize(int bodyIdx, int modelIdx, int meshIdx);
 
