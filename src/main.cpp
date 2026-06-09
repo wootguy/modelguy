@@ -326,7 +326,8 @@ int main(int argc, char* argv[])
 					newTexName = arg;
 				}
 			}
-			if (command == "info" || command == "layout" || command == "wavify" || command == "optimize") {
+			if (command == "info" || command == "layout" || command == "wavify" || command == "optimize"
+				|| command == "sounds") {
 				if (i == 2) {
 					inputFile = arg;
 				}
@@ -359,6 +360,7 @@ int main(int argc, char* argv[])
 			"  rename    : Renames a texture. Takes <old name> <new name> as parameters.\n"
 			"  info      : Write model info to a JSON file. Takes <input.mdl> <output.json> as parameters.\n"
 			"  wavify    : Apply .wav extension to all events. Takes <input.mdl> <output.json> as parameters\.n\n"
+			"  sounds    : List sound events (for weapon configs). Takes <input.mdl> as a parameter\.n\n"
 			"  porthl    : Port a Sven Co-op player model to Half-Life. Takes <input.mdl> and <output.mdl> as parameters.\n"
 			"              Add -noanim to skip animation porting, for generic models."
 			"  type      : Identify player model type. The return code is unique per mod.\n"
@@ -466,6 +468,13 @@ int main(int argc, char* argv[])
 			return 1;
 		}
 		wavify(inputFile, outputFile);
+	}
+	else if (command == "sounds") {
+		if (inputFile.size() == 0) {
+			cout << "ERROR: No input file specified\n";
+			return 1;
+		}
+		Model(inputFile).list_sound_events();
 	}
 	else if (command == "porthl") {
 		if (inputFile.size() == 0) {

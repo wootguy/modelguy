@@ -1687,6 +1687,45 @@ int Model::wavify() {
 	return numConverted;
 }
 
+void Model::list_sound_events() {
+	for (int i = 0; i < header->numseq; i++) {
+		data.seek(header->seqindex + i * sizeof(mstudioseqdesc_t));
+		mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
+
+		bool first_event = true;
+
+		for (int k = 0; k < seq->numevents; k++) {
+			data.seek(seq->eventindex + k * sizeof(mstudioevent_t));
+			mstudioevent_t* evt = (mstudioevent_t*)data.get();
+			std::string val = sanitize_string(evt->options);
+
+			if (val.empty())
+				continue;
+
+			switch (evt->event) {
+			case 1011:
+			case 1004:
+			case 1008:
+			case 5004:
+				if (first_event) {
+					printf("\n\n", i);
+					first_event = false;
+				}
+
+				if (val[0] == '*')
+					val = val.substr(1); // not sure why some models do this, it looks pointless.
+
+				int delayMs = (evt->frame / seq->fps) * 1000;
+
+				printf("\n[event.anim_%d.sound]\n", i);
+				printf("%-24s = %dms\n", "delay", delayMs);
+				printf("%-24s = %s\n", "sound", val.c_str());
+				break;
+			}
+		}
+	}
+}
+
 mstudioanim_t* Model::getAnimFrames(int sequence) {
 	data.seek(header->seqindex + sequence * sizeof(mstudioseqdesc_t));
 	mstudioseqdesc_t* seq = (mstudioseqdesc_t*)data.get();
