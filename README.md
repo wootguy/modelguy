@@ -46,3 +46,32 @@ modelguy merge barney.mdl
   modelguy image player.mdl 800x400 player.png
   modelguy porthl vtuber_kizuna.mdl vtuber_kizuna_v1sc.mdl
 ```
+
+# Building the source
+### Windows users:
+1. Install [CMake](https://cmake.org/download/), [Visual Studio Community](https://visualstudio.microsoft.com/downloads/), and [Git](https://git-scm.com/download/win).
+    * Visual Studio: Make sure to checkmark "Desktop development with C++" if you're installing for the first time. 
+1. Open a command prompt somewhere and run these commands to download and build the source code:
+   ```
+    git clone --recurse-submodules --shallow-submodules https://github.com/wootguy/modelguy
+    cd modelguy
+    mkdir build && cd build
+    cmake ..
+    cmake --build . --config Release
+    ```
+    (you can open a command-prompt in the current folder by typing `cmd` into the address bar of the explorer window)
+
+To build an x86 version for Windows XP, replace the `cmake ..` command with `cmake -A win32 -T v141_xp ..`. You will need the  `v141_xp` toolset downloaded. It's available in the Visual Studio Installer for VS 2017.
+
+### Linux users:
+1. Install Git, CMake, X11, GLFW, GLEW, OSMesa and a compiler.
+    * Debian: `sudo apt install build-essential git cmake libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev xorg-dev libglfw3-dev libglew-dev libxxf86vm-dev libosmesa6-dev`
+1. Open a terminal somewhere and run these commands:
+    ```
+    git clone --recurse-submodules --shallow-submodules https://github.com/wootguy/modelguy
+    cd modelguy
+    mkdir build && cd build
+    cmake .. -DCMAKE_BUILD_TYPE=Release
+    make
+    ```
+    (a terminal can _usually_ be opened by pressing F4 with the file manager window in focus)
