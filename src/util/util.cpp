@@ -9,6 +9,7 @@
 #include <windows.h>
 #else
 #include <sys/stat.h>
+#include <dirent.h>
 #endif
 
 using namespace std::chrono;

@@ -216,7 +216,7 @@ int port_hl(string inputFile, string outputFile, bool force, bool noanim) {
 		system(cmd.c_str());
 
 #else
-		printf("Oops! Linux can't do this yet. Recompile the model manually with Crowbar to fix the fullbright effects.\n")
+		printf("Oops! Linux can't do this yet. Recompile the model manually with Crowbar to fix the fullbright effects.\n");
 		printf("Recompile failed for: %s\n", outputFile.c_str());
 		return 1;
 #endif
