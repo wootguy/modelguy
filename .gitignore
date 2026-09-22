@@ -2,3 +2,4 @@ msvc/
 test/
 /build
 /build_html5
+/build_winxp

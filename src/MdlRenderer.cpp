@@ -1,7 +1,7 @@
 #include "MdlRenderer.h"
 #include "util.h"
 
-#ifndef EMSCRIPTEN
+#ifndef __EMSCRIPTEN__
 #include <GL/glew.h>
 #endif
 

@@ -7,13 +7,13 @@
 #include "lodepng.h"
 #include <cfloat>
 
-#ifndef EMSCRIPTEN
+#ifndef __EMSCRIPTEN__
 #include <GL/glew.h>
 #endif
 
 #include <GLFW/glfw3.h>
 
-#if !defined(WIN32) && !defined(EMSCRIPTEN)
+#if !defined(WIN32) && !defined(__EMSCRIPTEN__)
 #define GLAPI extern
 #include <GL/osmesa.h>
 #endif
@@ -53,7 +53,7 @@ Renderer::Renderer(string fpath, int width, int height, bool legacy_renderer, bo
 	g_app = this;
 
 	if (headless) {
-#if defined(WIN32) || defined(EMSCRIPTEN)
+#if defined(WIN32) || defined(__EMSCRIPTEN__)
 		valid = create_window(width, height);
 #else
 		valid = create_headless_context(width, height);
@@ -114,7 +114,7 @@ void Renderer::reset_view() {
 	}
 }
 void Renderer::resize_view(int width, int height) {
-#if defined(WIN32) || defined(EMSCRIPTEN)
+#if defined(WIN32) || defined(__EMSCRIPTEN__)
 	glfwSetWindowSize(window, width, height);
 #endif
 }
@@ -136,7 +136,7 @@ void Renderer::init_gl() {
 }
 
 bool Renderer::create_window(int width, int height) {
-#if defined(WIN32) || defined(EMSCRIPTEN)
+#if defined(WIN32) || defined(__EMSCRIPTEN__)
 	if (!glfwInit())
 	{
 		printf("GLFW initialization failed\n");
@@ -163,7 +163,7 @@ bool Renderer::create_window(int width, int height) {
 	glfwSetWindowSizeLimits(window, 250, 50, GLFW_DONT_CARE, GLFW_DONT_CARE);
 	glfwMakeContextCurrent(window);
 
-#ifndef EMSCRIPTEN
+#ifndef __EMSCRIPTEN__
 	GLenum err = glewInit();
 	if (err != GLEW_OK) {
 		printf("Failed to initialize GLEW: %s\n", glewGetErrorString(err));
@@ -176,7 +176,7 @@ bool Renderer::create_window(int width, int height) {
 }
 
 bool Renderer::create_headless_context(int width, int height) {
-#if !defined(WIN32) && !defined(EMSCRIPTEN)
+#if !defined(WIN32) && !defined(__EMSCRIPTEN__)
 	const int attribs[] = {
 		OSMESA_FORMAT, OSMESA_RGBA,
 		OSMESA_DEPTH_BITS, 16,
@@ -368,7 +368,7 @@ void Renderer::setup_render() {
 }
 
 void Renderer::render() {
-#if defined(WIN32) || defined(EMSCRIPTEN)
+#if defined(WIN32) || defined(__EMSCRIPTEN__)
 	glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
 #endif
 
@@ -425,7 +425,7 @@ void Renderer::render_loop() {
 		return;
 	}
 
-#if defined(WIN32) || defined(EMSCRIPTEN)
+#if defined(WIN32) || defined(__EMSCRIPTEN__)
 	setup_render();
 
 	while (!glfwWindowShouldClose(window)) {
@@ -448,7 +448,7 @@ void Renderer::create_image(string outPath) {
 	render();
 	glFlush();
 
-#if defined(WIN32) || defined(EMSCRIPTEN)
+#if defined(WIN32) || defined(__EMSCRIPTEN__)
 	uint8_t* pixels = new uint8_t[windowWidth * windowHeight * 4];
 	glReadPixels(0, 0, windowWidth, windowHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 	lodepng_encode32_file(outPath.c_str(), pixels, windowWidth, windowHeight);

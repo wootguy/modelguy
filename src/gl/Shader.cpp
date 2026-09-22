@@ -1,4 +1,4 @@
-#ifdef EMSCRIPTEN
+#ifdef __EMSCRIPTEN__
 #include <GLES3/gl3.h>
 #else
 #include <GL/glew.h>
@@ -9,7 +9,7 @@
 
 Shader::Shader( const char * sourceCode, int shaderType )
 {
-#ifdef EMSCRIPTEN
+#ifdef __EMSCRIPTEN__
 	string sourceCopy = sourceCode;
 	sourceCopy = replaceString(sourceCopy, "#version 120", "#version 100\nprecision highp float;\nprecision highp int;");
 	sourceCode = sourceCopy.c_str();

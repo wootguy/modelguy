@@ -1,4 +1,4 @@
-#ifdef EMSCRIPTEN
+#ifdef __EMSCRIPTEN__
 
 #include <GLFW/glfw3.h>
 #include "Renderer.h"

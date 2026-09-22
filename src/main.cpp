@@ -258,7 +258,7 @@ int image_model(string inputFile, string outputFile, int width, int height) {
 	return 0;
 }
 
-#ifndef EMSCRIPTEN
+#ifndef __EMSCRIPTEN__
 
 int main(int argc, char* argv[])
 {
